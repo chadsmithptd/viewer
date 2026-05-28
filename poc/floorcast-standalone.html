@@ -14,7 +14,7 @@
 html,body{height:100%;overflow:hidden;background:var(--bg);font-family:'Inter','Segoe UI',system-ui,sans-serif;color:var(--text)}
 #app{
   display:grid;
-  grid-template:"header header" 48px "canvas sidebar" 1fr "scrub sidebar" 80px / 1fr 280px;
+  grid-template:"header header header" 48px "joblist canvas sidebar" 1fr "joblist scrub sidebar" 80px / 220px 1fr 280px;
   height:100vh;
 }
 #header{
@@ -26,6 +26,28 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:'Inter','
 .status-bar span b{color:var(--text)}
 #canvas-wrap{grid-area:canvas;position:relative;overflow:hidden}
 #canvas-wrap canvas{display:block}
+#job-panel{
+  grid-area:joblist;display:flex;flex-direction:column;background:var(--panel-bg);
+  border-right:1px solid var(--border);overflow-y:auto;padding:12px 10px;gap:8px;
+}
+#job-panel .panel-title{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);margin-bottom:4px;}
+.job-card{
+  background:rgba(0,200,255,0.05);border:1px solid var(--border);border-radius:var(--radius);
+  padding:7px 9px;cursor:pointer;transition:background .15s,border-color .15s;
+}
+.job-card:hover{background:rgba(0,200,255,0.1);border-color:rgba(0,200,255,0.5);}
+.job-card.selected{background:rgba(0,200,255,0.18);border-color:var(--cyan);}
+.job-card .jc-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.job-card .jc-meta{font-size:10px;color:var(--dim);margin-top:2px;}
+.job-card .jc-meta b{color:var(--text);}
+.job-load-panel{
+  background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:var(--radius);
+  padding:8px;margin-top:2px;display:none;
+}
+.job-load-panel.visible{display:block;}
+.job-load-panel canvas{display:block;border-radius:3px;}
+.job-load-panel .jlp-stats{font-size:10px;color:var(--dim);margin-top:5px;line-height:1.5;}
+.job-load-panel .jlp-stats b{color:var(--text);}
 #scrubber{
   grid-area:scrub;display:flex;align-items:center;gap:12px;padding:0 20px;
   background:var(--panel-bg);border-top:1px solid var(--border);
@@ -206,6 +228,10 @@ select:focus,input:focus{border-color:var(--cyan)}
       <button id="flows-toggle" title="Show/hide flow pipes" style="background:rgba(0,200,255,.12);border:1px solid var(--cyan);color:var(--cyan);font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;letter-spacing:.06em;">⇝ Flows ON</button>
     </div>
   </header>
+  <div id="job-panel">
+    <div class="panel-title">Job List</div>
+    <div id="job-cards"></div>
+  </div>
   <div id="canvas-wrap"><canvas id="main-canvas"></canvas></div>
   <div id="scrubber">
     <button id="play-btn">▶</button>
@@ -728,6 +754,7 @@ window.addEventListener('resize',function(){
 // ─── Flow arrows (Sankey-like pipes between machines) ────────────────────────
 var flowObjects=[];
 var flowParticles=[];
+var flowConnections=[];
 var showFlows=true;
 
 function getMachinePos(id){
@@ -740,9 +767,11 @@ function buildFlowArrows(){
   flowObjects.forEach(function(o){scene.remove(o);});
   flowObjects=[];
   flowParticles=[];
+  flowConnections=[];
 
   Object.keys(DOWNSTREAM).forEach(function(fromId){
     DOWNSTREAM[fromId].forEach(function(toId){
+      var connObjects=[];
       var from=getMachinePos(fromId).clone();
       var to=getMachinePos(toId).clone();
       from.y=0.12; to.y=0.12;
@@ -775,6 +804,7 @@ function buildFlowArrows(){
       var tube=new THREE.Mesh(tubeGeo,tubeMat);
       scene.add(tube);
       flowObjects.push(tube);
+      connObjects.push(tube);
 
       // arrowhead cone at destination end
       var coneGeo=new THREE.ConeGeometry(0.08,0.25,6);
@@ -788,6 +818,7 @@ function buildFlowArrows(){
       cone.quaternion.setFromUnitVectors(axis,endTangent);
       scene.add(cone);
       flowObjects.push(cone);
+      connObjects.push(cone);
 
       // particles — small spheres that travel along curve
       var numParticles=3;
@@ -797,9 +828,18 @@ function buildFlowArrows(){
         var pMesh=new THREE.Mesh(pGeo,pMat);
         scene.add(pMesh);
         flowObjects.push(pMesh);
+        connObjects.push(pMesh);
         flowParticles.push({mesh:pMesh, curve:curve, t:(p/numParticles), fromId:fromId, toId:toId, tubeMat:tubeMat, coneMat:coneMat});
       }
+      flowConnections.push({fromId:fromId, toId:toId, objects:connObjects});
     });
+  });
+}
+
+function applyFlowFilter(machineId){
+  flowConnections.forEach(function(conn){
+    var show = showFlows && (machineId===null || conn.fromId===machineId || conn.toId===machineId);
+    conn.objects.forEach(function(o){ o.visible=show; });
   });
 }
 
@@ -1066,6 +1106,7 @@ document.getElementById('drawer-close').addEventListener('click',function(){
   for(var i=mutations.length-1;i>=0;i--){if(mutations[i]._fromDrawer)mutations.splice(i,1);}
   recompute();
   Object.values(machineObjects).forEach(function(o){ o.group.scale.set(1,1,1); });
+  applyFlowFilter(null);
 });
 
 function openDrawer(machineId){
@@ -1083,6 +1124,7 @@ function openDrawer(machineId){
   Object.keys(machineObjects).forEach(function(id){
     machineObjects[id].group.scale.set(id===machineId?1.12:1, id===machineId?1.12:1, id===machineId?1.12:1);
   });
+  applyFlowFilter(machineId);
   renderDrawerCharts(machineId);
 }
 
@@ -1489,8 +1531,123 @@ document.getElementById('flows-toggle').addEventListener('click',function(){
   showFlows=!showFlows;
   this.textContent='⇝ Flows '+(showFlows?'ON':'OFF');
   this.style.opacity=showFlows?'1':'0.5';
-  flowObjects.forEach(function(o){o.visible=showFlows;});
+  applyFlowFilter(null);
 });
+
+// ─── Job panel ───────────────────────────────────────────────────────────────
+var selectedJobId=null;
+
+function getJobMachineSet(job){
+  var visited={};
+  function walk(mid){
+    if(visited[mid]) return;
+    visited[mid]=true;
+    (DOWNSTREAM[mid]||[]).forEach(walk);
+  }
+  walk(job.fromMachine);
+  return visited;
+}
+
+function applyJobHighlight(job){
+  if(!job){
+    Object.values(machineObjects).forEach(function(o){ o.topMesh.material.emissiveIntensity=0.6; });
+    return;
+  }
+  var touched=getJobMachineSet(job);
+  MACHINES.forEach(function(m){
+    var obj=machineObjects[m.id];
+    obj.topMesh.material.emissiveIntensity = touched[m.id] ? 0.6 : 0.18;
+  });
+}
+
+function getMachineName(id){
+  var m=MACHINES.filter(function(m){return m.id===id;})[0];
+  return m?m.name:id;
+}
+
+function buildMachinePath(job){
+  var path=[job.fromMachine];
+  var visited={};
+  function walk(mid){
+    if(visited[mid]) return;
+    visited[mid]=true;
+    var ds=DOWNSTREAM[mid]||[];
+    ds.forEach(function(child){ path.push(child); walk(child); });
+  }
+  walk(job.fromMachine);
+  return path.map(getMachineName).join(' → ');
+}
+
+function drawJobLoadChart(canvas, machineId, dueDay){
+  var W=canvas.width, H=canvas.height;
+  var ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  var arr=currentSchedule[machineId];
+  if(!arr) return;
+  var n=arr.length;
+  var barW=W/n;
+  // highlight band for 0..dueDay
+  ctx.fillStyle='rgba(0,200,255,0.1)';
+  ctx.fillRect(0,0,barW*Math.min(dueDay,n-1),H);
+  // bars
+  for(var i=0;i<n;i++){
+    var v=arr[i];
+    var col=v>0.85?'#ff3333':v>0.65?'#ffaa00':'#00c8ff';
+    ctx.fillStyle=col;
+    ctx.fillRect(i*barW+1,H-v*H,barW-1,v*H);
+  }
+  // due day line
+  if(dueDay<n){
+    ctx.strokeStyle='rgba(255,255,100,0.7)';
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(dueDay*barW,0);
+    ctx.lineTo(dueDay*barW,H);
+    ctx.stroke();
+  }
+}
+
+function renderJobLoadPanel(container, job){
+  var lp=container.querySelector('.job-load-panel');
+  var arr=currentSchedule[job.fromMachine]||[];
+  var peak=0, atRisk=0;
+  arr.forEach(function(v){ if(v>peak) peak=v; if(v>0.85) atRisk++; });
+  var path=buildMachinePath(job);
+  lp.innerHTML='<canvas width="198" height="50"></canvas><div class="jlp-stats">Peak: <b>'+(peak*100).toFixed(0)+'%</b> · Days at risk: <b>'+atRisk+'</b><br>Path: <b style="font-size:9px;color:var(--cyan)">'+path+'</b></div>';
+  lp.classList.add('visible');
+  drawJobLoadChart(lp.querySelector('canvas'), job.fromMachine, job.dueDay);
+}
+
+(function initJobPanel(){
+  var container=document.getElementById('job-cards');
+  JOBS.forEach(function(job){
+    var fromName=getMachineName(job.fromMachine);
+    var wrap=document.createElement('div');
+    wrap.innerHTML='<div class="job-card" data-id="'+job.id+'">'
+      +'<div class="jc-name">'+job.name+'</div>'
+      +'<div class="jc-meta">Due day <b>'+job.dueDay+'</b> · Qty <b>'+job.qty+'</b> · <b>'+fromName+'</b></div>'
+      +'</div>'
+      +'<div class="job-load-panel"></div>';
+    var card=wrap.querySelector('.job-card');
+    card.addEventListener('click',function(){
+      if(selectedJobId===job.id){
+        // deselect
+        selectedJobId=null;
+        document.querySelectorAll('.job-card').forEach(function(c){c.classList.remove('selected');});
+        document.querySelectorAll('.job-load-panel').forEach(function(p){p.classList.remove('visible');});
+        applyJobHighlight(null);
+      } else {
+        selectedJobId=job.id;
+        document.querySelectorAll('.job-card').forEach(function(c){c.classList.remove('selected');});
+        document.querySelectorAll('.job-load-panel').forEach(function(p){p.classList.remove('visible');});
+        card.classList.add('selected');
+        renderJobLoadPanel(wrap, job);
+        applyJobHighlight(job);
+      }
+    });
+    container.appendChild(wrap);
+  });
+})();
 
 refresh();
 </script>
