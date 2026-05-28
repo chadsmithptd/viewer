@@ -836,10 +836,12 @@ function buildFlowArrows(){
   });
 }
 
+var _activeFlowFilter=null;
 function applyFlowFilter(machineId){
+  _activeFlowFilter=machineId;
   flowConnections.forEach(function(conn){
-    var show = showFlows && (machineId===null || conn.fromId===machineId || conn.toId===machineId);
-    conn.objects.forEach(function(o){ o.visible=show; });
+    var show=showFlows&&(machineId===null||conn.fromId===machineId||conn.toId===machineId);
+    conn.objects.forEach(function(o){o.visible=show;});
   });
 }
 
@@ -857,19 +859,17 @@ function updateFlowColors(utilMap){
 
 var _flowT=0;
 function animateFlowParticles(dt){
-  if(!showFlows) return;
   _flowT+=dt;
   flowParticles.forEach(function(fp){
+    var shouldShow=showFlows&&(_activeFlowFilter===null||fp.fromId===_activeFlowFilter||fp.toId===_activeFlowFilter);
+    fp.mesh.visible=shouldShow;
+    if(!shouldShow) return;
     fp.t=(fp.t+dt*0.18)%1;
     var pos=fp.curve.getPoint(fp.t);
     fp.mesh.position.copy(pos);
-    // color matches source util
     var u=machineObjects[fp.fromId]?machineObjects[fp.fromId].utilValue:0;
     fp.mesh.material.color.copy(heatColor(u));
-    fp.mesh.visible=showFlows;
   });
-  // also hide/show tubes/cones
-  flowObjects.forEach(function(o){o.visible=showFlows;});
 }
 
 buildFlowArrows();
@@ -1531,7 +1531,7 @@ document.getElementById('flows-toggle').addEventListener('click',function(){
   showFlows=!showFlows;
   this.textContent='⇝ Flows '+(showFlows?'ON':'OFF');
   this.style.opacity=showFlows?'1':'0.5';
-  applyFlowFilter(null);
+  applyFlowFilter(_activeFlowFilter);
 });
 
 // ─── Job panel ───────────────────────────────────────────────────────────────
