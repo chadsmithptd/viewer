@@ -146,31 +146,41 @@ select:focus,input:focus{border-color:var(--cyan)}
 .score-label{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-top:1px}
 .score-delta{font-size:11px;font-weight:600;min-width:40px;text-align:center}
 
-/* ── Fix option sliders ───────────────────────────────────────── */
+/* ── Fix option cards ─────────────────────────────────────────── */
 .fix-option{
-  display:flex;flex-direction:column;gap:4px;
-  padding:8px 10px;border-radius:5px;
-  background:rgba(0,180,255,.05);border:1px solid rgba(0,180,255,.12);
-  transition:border-color .2s,background .2s;
+  display:flex;flex-direction:column;gap:6px;
+  padding:9px 11px;border-radius:5px;
+  background:rgba(255,255,255,.03);border:1px solid rgba(0,180,255,.12);
+  transition:border-color .2s,background .2s;opacity:.7;
 }
-.fix-option:hover{border-color:rgba(0,180,255,.28);background:rgba(0,180,255,.09)}
-.fix-option-header{display:flex;align-items:center;justify-content:space-between}
-.fix-option-name{font-size:11px;font-weight:600;color:var(--text)}
+.fix-option.active{
+  border-color:rgba(0,255,136,.5);background:rgba(0,255,136,.06);opacity:1;
+}
+.fix-option-header{display:flex;align-items:flex-start;gap:10px}
+.fix-option-toggle{flex-shrink:0;margin-top:1px}
+.fix-option-text{flex:1;display:flex;flex-direction:column;gap:2px}
+.fix-option-name{font-size:11px;font-weight:600;color:var(--text);line-height:1.3}
+.fix-option-desc{font-size:10px;color:var(--dim);line-height:1.3}
 .fix-option-badge{
-  font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;
-  transition:background .3s,color .3s;
+  font-size:10px;font-weight:700;padding:1px 8px;border-radius:10px;white-space:nowrap;
+  background:rgba(100,140,180,.12);color:var(--dim);flex-shrink:0;align-self:flex-start;
+  transition:background .25s,color .25s;
 }
-.fix-slider-row{display:flex;align-items:center;gap:8px}
-.fix-slider-label{font-size:10px;color:var(--dim);white-space:nowrap;min-width:64px}
+.fix-option.active .fix-option-badge.good{background:rgba(0,255,136,.18);color:var(--green)}
+.fix-option.active .fix-option-badge.neutral{background:rgba(255,170,0,.15);color:var(--amber)}
+/* slider row — only shown when active */
+.fix-slider-row{display:none;align-items:center;gap:8px;padding-left:26px}
+.fix-option.active .fix-slider-row{display:flex}
+.fix-slider-label{font-size:10px;color:var(--dim);white-space:nowrap;min-width:68px}
 .fix-slider{
   flex:1;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;cursor:pointer;
-  background:linear-gradient(to right,var(--cyan) 0%,#1a2a3a 0%);
+  background:linear-gradient(to right,var(--green) 0%,#1a2a3a 0%);
 }
 .fix-slider::-webkit-slider-thumb{
-  -webkit-appearance:none;width:12px;height:12px;border-radius:50%;
-  background:var(--cyan);cursor:pointer;box-shadow:0 0 5px rgba(0,200,255,.6);
+  -webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--green);cursor:pointer;box-shadow:0 0 6px rgba(0,255,136,.5);
 }
-.fix-slider-val{font-size:10px;color:var(--cyan);min-width:28px;text-align:right}
+.fix-slider-val{font-size:11px;font-weight:600;color:var(--green);min-width:32px;text-align:right}
 </style>
 </head>
 <body>
@@ -733,7 +743,7 @@ function refresh(){
   if(drawerMachineId) renderDrawerCharts(drawerMachineId);
 }
 
-function recompute(){currentSchedule=computeSchedule(mutations);updateChips();refresh();if(drawerMachineId) openDrawer(drawerMachineId);}
+function recompute(){currentSchedule=computeSchedule(mutations);updateChips();refresh();}
 var drawerMachineId=null;
 
 function removeMutation(type,machineId,jobId){
@@ -839,7 +849,7 @@ var drawer=document.getElementById('detail-drawer');
 document.getElementById('drawer-close').addEventListener('click',function(){
   drawer.classList.remove('open');
   drawerMachineId=null;
-  drawerSliders={shiftHours:0,moveJobId:null,movePct:0};
+  drawerSliders={}; drawerFixes={};
   for(var i=mutations.length-1;i>=0;i--){if(mutations[i]._fromDrawer)mutations.splice(i,1);}
   recompute();
   Object.values(machineObjects).forEach(function(o){ o.group.scale.set(1,1,1); });
@@ -847,10 +857,10 @@ document.getElementById('drawer-close').addEventListener('click',function(){
 
 function openDrawer(machineId){
   drawerMachineId=machineId;
-  // reset slider state for new machine
-  if(!drawerSliders._lastMachine||drawerSliders._lastMachine!==machineId){
-    drawerSliders={shiftHours:0,moveJobId:null,movePct:0,_lastMachine:machineId};
-    // remove any pending drawer mutations
+  // reset fix state when switching machines
+  if(drawerSliders._lastMachine !== machineId){
+    drawerSliders = {_lastMachine: machineId};
+    drawerFixes = {};
     for(var i=mutations.length-1;i>=0;i--){if(mutations[i]._fromDrawer)mutations.splice(i,1);}
   }
   var m=MACHINES.filter(function(m){return m.id===machineId;})[0];
@@ -969,6 +979,12 @@ function renderDownstream(machineId){
   list.innerHTML=html;
 }
 
+// ── Debounce ──────────────────────────────────────────────────────────────────
+function debounce(fn, ms){
+  var t; return function(){ clearTimeout(t); t=setTimeout(fn, ms); };
+}
+var debouncedRecompute = debounce(function(){ recompute(); }, 280);
+
 // ── Health scoring engine ─────────────────────────────────────────────────────
 function scoreSchedule(sched){
   // Shop health 0-100
@@ -1000,22 +1016,6 @@ function scoreSchedule(sched){
 // per-drawer slider state: { shiftHours, moveJobId, movePct }
 var drawerSliders={shiftHours:0, moveJobId:null, movePct:0};
 
-function buildDrawerMutations(machineId){
-  var muts=[];
-  if(drawerSliders.shiftHours>0){
-    var mult=8/(8+drawerSliders.shiftHours);
-    muts.push({type:'shift',machineId:machineId,startDay:0,endDay:TOTAL_DAYS-1,capacityMultiplier:mult});
-  }
-  if(drawerSliders.moveJobId&&drawerSliders.movePct>0){
-    var job=JOBS.filter(function(j){return j.id===drawerSliders.moveJobId;})[0];
-    if(job){
-      var bestMid=findBestTarget(machineId);
-      muts.push({type:'moveJob',jobId:job.id,toMachineId:bestMid,loadFraction:drawerSliders.movePct/100});
-    }
-  }
-  return muts;
-}
-
 function findBestTarget(excludeId){
   var best=null,bv=99;
   MACHINES.forEach(function(m){
@@ -1026,16 +1026,15 @@ function findBestTarget(excludeId){
   return best;
 }
 
-function applyDrawerFixes(machineId){
-  // merge drawer mutations into global mutations list
-  // remove old drawer-sourced mutations first
+function applyDrawerFixes(){
+  // remove old drawer mutations, re-add only active ones
   for(var i=mutations.length-1;i>=0;i--){
     if(mutations[i]._fromDrawer) mutations.splice(i,1);
   }
-  var dm=buildDrawerMutations(machineId);
-  dm.forEach(function(m){m._fromDrawer=true; mutations.push(m);});
-  recompute();
-  renderScoreHeader(machineId);
+  Object.values(drawerFixes).forEach(function(state){
+    if(state.active && state._mut) mutations.push(state._mut);
+  });
+  debouncedRecompute();
 }
 
 function renderScoreHeader(machineId){
@@ -1053,119 +1052,188 @@ function renderScoreHeader(machineId){
   dEl.style.color=delta>0?'var(--green)':delta<0?'var(--red)':'var(--dim)';
 }
 
+// ── Fix option card builder ───────────────────────────────────────────────────
+// drawerFixes: { fixId -> { active, params } }
+var drawerFixes = {};
+
 function renderFixOptions(machineId){
-  var list=document.getElementById('drawer-fix-list');
-  var jobsHere=JOBS.filter(function(j){return j.fromMachine===machineId;});
-  var bestTarget=findBestTarget(machineId);
-  var bestTargetName=bestTarget?MACHINES.filter(function(m){return m.id===bestTarget;})[0].name:'—';
+  var list = document.getElementById('drawer-fix-list');
+  list.innerHTML = '';
 
-  list.innerHTML='';
+  var jobsHere = JOBS.filter(function(j){ return j.fromMachine===machineId; });
+  var otherMachines = MACHINES.filter(function(m){ return m.id!==machineId; });
 
-  // ── Option 1: Evening shift slider ──────────────────────────
-  var shiftDiv=document.createElement('div'); shiftDiv.className='fix-option';
-  var shiftScore=previewScore(machineId,[{type:'shift',machineId:machineId,startDay:0,endDay:TOTAL_DAYS-1,capacityMultiplier:8/16}]);
-  shiftDiv.innerHTML=
+  // Build the fix definitions for this machine
+  var fixes = [];
+
+  // ① Overtime / evening shift — slider
+  fixes.push({
+    id: 'overtime',
+    type: 'slider',
+    name: 'Schedule Overtime',
+    desc: 'Add overtime hours to '+MACHINES.filter(function(m){return m.id===machineId;})[0].name,
+    unit: 'h/day', min:1, max:12, step:1, defaultVal:4,
+    mutation: function(val){
+      return {type:'shift',machineId:machineId,startDay:0,endDay:TOTAL_DAYS-1,capacityMultiplier:8/(8+val),_fromDrawer:true};
+    }
+  });
+
+  // ② Move each job to best available machine — toggle
+  jobsHere.forEach(function(job){
+    var bestMid = findBestTarget(machineId);
+    var bestName = bestMid ? MACHINES.filter(function(m){return m.id===bestMid;})[0].name : '?';
+    fixes.push({
+      id: 'move-'+job.id,
+      type: 'toggle',
+      name: 'Move '+job.name,
+      desc: MACHINES.filter(function(m){return m.id===machineId;})[0].name+' → '+bestName+' (full job)',
+      mutation: function(){
+        return {type:'moveJob',jobId:job.id,toMachineId:bestMid,loadFraction:1,_fromDrawer:true};
+      }
+    });
+  });
+
+  // ③ Split each job — slider (partial move)
+  jobsHere.forEach(function(job){
+    var bestMid = findBestTarget(machineId);
+    var bestName = bestMid ? MACHINES.filter(function(m){return m.id===bestMid;})[0].name : '?';
+    fixes.push({
+      id: 'split-'+job.id,
+      type: 'slider',
+      name: 'Split '+job.name,
+      desc: 'Move a portion of this job to '+bestName,
+      unit:'%', min:10, max:90, step:10, defaultVal:50,
+      mutation: function(val){
+        return {type:'moveJob',jobId:job.id,toMachineId:bestMid,loadFraction:val/100,_fromDrawer:true};
+      }
+    });
+  });
+
+  // ④ Schedule downtime (forces ops to be done before or rescheduled after)
+  fixes.push({
+    id: 'downtime',
+    type: 'slider',
+    name: 'Schedule Planned Downtime',
+    desc: 'Block this machine for maintenance — forces work to redistribute',
+    unit:' days', min:1, max:7, step:1, defaultVal:2,
+    mutation: function(val){
+      return {type:'downtime',machineId:machineId,startDay:14,endDay:14+val-1,_fromDrawer:true};
+    }
+  });
+
+  // Render each card
+  fixes.forEach(function(fix){
+    if(!drawerFixes[fix.id]) drawerFixes[fix.id]={active:false,val:fix.defaultVal||fix.min||1};
+    var state = drawerFixes[fix.id];
+    var card = buildFixCard(fix, state, machineId);
+    list.appendChild(card);
+  });
+
+  renderScoreHeader(machineId);
+}
+
+function buildFixCard(fix, state, machineId){
+  var card = document.createElement('div');
+  card.className = 'fix-option' + (state.active?' active':'');
+  card.dataset.fixId = fix.id;
+
+  // score preview for this fix at current/default value
+  var previewMut = fix.type==='slider' ? fix.mutation(state.val) : fix.mutation();
+  var ps = previewScore([previewMut]);
+  var badgeClass = ps.dh>0?'good':'neutral';
+  var badgeText = (ps.dh>=0?'+':'')+ps.dh+' health · '+(ps.dj>=0?'+':'')+ps.dj+' jobs';
+
+  var sliderHtml = '';
+  if(fix.type==='slider'){
+    var pct = (state.val - fix.min)/(fix.max - fix.min)*100;
+    var trackBg = state.active
+      ? 'linear-gradient(to right,var(--green) '+pct+'%,#1a2a3a '+pct+'%)'
+      : 'linear-gradient(to right,var(--dim) '+pct+'%,#1a2a3a '+pct+'%)';
+    sliderHtml =
+      '<div class="fix-slider-row">'
+      +'<span class="fix-slider-label">'+fix.unit.trim()+'</span>'
+      +'<input type="range" class="fix-slider" min="'+fix.min+'" max="'+fix.max+'" step="'+fix.step+'" value="'+state.val+'" style="background:'+trackBg+'">'
+      +'<span class="fix-slider-val">'+state.val+fix.unit+'</span>'
+      +'</div>';
+  }
+
+  card.innerHTML =
     '<div class="fix-option-header">'
-    +'<span class="fix-option-name">Evening Shift — add capacity to this machine</span>'
-    +'<span class="fix-option-badge" id="fix-badge-shift">+'+shiftScore.dh+' health &middot; +'+shiftScore.dj+' jobs</span>'
+    +'<div class="fix-option-toggle">'
+    +  '<label class="toggle-wrap">'
+    +    '<input type="checkbox" '+(state.active?'checked':'')+'>'
+    +    '<span class="toggle-track"><span class="toggle-thumb"></span></span>'
+    +  '</label>'
     +'</div>'
-    +'<div class="fix-slider-row">'
-    +'<span class="fix-slider-label">Hours added</span>'
-    +'<input type="range" class="fix-slider" id="fix-slider-shift" min="0" max="12" step="1" value="'+drawerSliders.shiftHours+'">'
-    +'<span class="fix-slider-val" id="fix-val-shift">'+drawerSliders.shiftHours+'h</span>'
-    +'</div>';
-  list.appendChild(shiftDiv);
+    +'<div class="fix-option-text">'
+    +  '<span class="fix-option-name">'+fix.name+'</span>'
+    +  '<span class="fix-option-desc">'+fix.desc+'</span>'
+    +'</div>'
+    +'<span class="fix-option-badge '+badgeClass+'">'+badgeText+'</span>'
+    +'</div>'
+    + sliderHtml;
 
-  // ── Option 2: Move job slider (only if jobs exist here) ─────
-  if(jobsHere.length){
-    jobsHere.forEach(function(job){
-      var jDiv=document.createElement('div'); jDiv.className='fix-option';
-      var moveScore=previewScore(machineId,[{type:'moveJob',jobId:job.id,toMachineId:bestTarget}]);
-      var pct=drawerSliders.moveJobId===job.id?drawerSliders.movePct:0;
-      jDiv.innerHTML=
-        '<div class="fix-option-header">'
-        +'<span class="fix-option-name">Move "'+job.name+'" → '+bestTargetName+'</span>'
-        +'<span class="fix-option-badge" id="fix-badge-move-'+job.id+'">+'+moveScore.dh+' health &middot; +'+moveScore.dj+' jobs</span>'
-        +'</div>'
-        +'<div class="fix-slider-row">'
-        +'<span class="fix-slider-label">% of load moved</span>'
-        +'<input type="range" class="fix-slider" id="fix-slider-move-'+job.id+'" min="0" max="100" step="5" value="'+pct+'">'
-        +'<span class="fix-slider-val" id="fix-val-move-'+job.id+'">'+pct+'%</span>'
-        +'</div>';
-      list.appendChild(jDiv);
+  // wire toggle
+  var chk = card.querySelector('input[type=checkbox]');
+  chk.addEventListener('change', function(){
+    state.active = chk.checked;
+    state._mut = fix.type==='slider' ? fix.mutation(state.val) : fix.mutation();
+    card.classList.toggle('active', state.active);
+    updateSliderColor(card, state.active);
+    applyDrawerFixes();
+    renderScoreHeader(machineId);
+    updateBadge(card, fix, state);
+  });
 
-      // wire slider
-      (function(j){
-        setTimeout(function(){
-          var sl=document.getElementById('fix-slider-move-'+j.id);
-          if(!sl) return;
-          updateSliderTrack(sl);
-          sl.addEventListener('input',function(){
-            drawerSliders.moveJobId=j.id;
-            drawerSliders.movePct=parseInt(sl.value);
-            document.getElementById('fix-val-move-'+j.id).textContent=sl.value+'%';
-            updateSliderTrack(sl);
-            applyDrawerFixes(machineId);
-            renderDrawerCharts(machineId);
-          });
-        },0);
-      })(job);
+  // wire slider (debounced — only updates score/floor, not the card preview)
+  if(fix.type==='slider'){
+    var sl = card.querySelector('.fix-slider');
+    var valEl = card.querySelector('.fix-slider-val');
+    sl.addEventListener('input', function(){
+      state.val = parseInt(sl.value);
+      state._mut = fix.mutation(state.val);
+      valEl.textContent = state.val + fix.unit;
+      updateSliderColor(card, state.active, sl);
+      updateBadge(card, fix, state);
+      if(state.active){
+        applyDrawerFixes();         // updates mutations array immediately
+        renderScoreHeader(machineId); // score updates debounced via debouncedRecompute
+      }
     });
   }
 
-  // wire shift slider
-  setTimeout(function(){
-    var sl=document.getElementById('fix-slider-shift');
-    if(!sl) return;
-    updateSliderTrack(sl);
-    sl.addEventListener('input',function(){
-      drawerSliders.shiftHours=parseInt(sl.value);
-      document.getElementById('fix-val-shift').textContent=sl.value+'h';
-      updateSliderTrack(sl);
-      // update badge preview
-      if(sl.value>0){
-        var mult=8/(8+parseInt(sl.value));
-        var s=previewScore(machineId,[{type:'shift',machineId:machineId,startDay:0,endDay:TOTAL_DAYS-1,capacityMultiplier:mult}]);
-        var b=document.getElementById('fix-badge-shift');
-        if(b){b.textContent=(s.dh>=0?'+':'')+s.dh+' health · '+(s.dj>=0?'+':'')+s.dj+' jobs'; styleBadge(b,s.dh);}
-      }
-      applyDrawerFixes(machineId);
-      renderDrawerCharts(machineId);
-    });
-  },0);
-
-  renderScoreHeader(machineId);
-  updateAllBadgeColors();
+  return card;
 }
 
-function previewScore(machineId, extraMuts){
-  var base=scoreSchedule(currentSchedule);
-  var preview=computeSchedule(mutations.filter(function(m){return !m._fromDrawer;}).concat(extraMuts));
-  var after=scoreSchedule(preview);
-  return {dh:after.health-base.health, dj:after.onTime-base.onTime};
+
+function updateSliderColor(card, active, sl){
+  var slider = sl || card.querySelector('.fix-slider');
+  if(!slider) return;
+  var pct = (slider.value - slider.min)/(slider.max - slider.min)*100;
+  var col = active ? 'var(--green)' : 'var(--dim)';
+  slider.style.background = 'linear-gradient(to right,'+col+' '+pct+'%,#1a2a3a '+pct+'%)';
+}
+
+function updateBadge(card, fix, state){
+  var previewMut = fix.type==='slider' ? fix.mutation(state.val) : fix.mutation();
+  var ps = previewScore([previewMut]);
+  var el = card.querySelector('.fix-option-badge');
+  if(!el) return;
+  el.textContent = (ps.dh>=0?'+':'')+ps.dh+' health · '+(ps.dj>=0?'+':'')+ps.dj+' jobs';
+  el.className = 'fix-option-badge '+(ps.dh>0?'good':'neutral');
+}
+
+function previewScore(extraMuts){
+  var base = scoreSchedule(currentSchedule);
+  var baseMuts = mutations.filter(function(m){ return !m._fromDrawer; });
+  var preview = computeSchedule(baseMuts.concat(extraMuts));
+  var after = scoreSchedule(preview);
+  return {dh: after.health-base.health, dj: after.onTime-base.onTime};
 }
 
 function updateSliderTrack(sl){
   var pct=(sl.value-sl.min)/(sl.max-sl.min)*100;
   sl.style.background='linear-gradient(to right,var(--cyan) '+pct+'%,#1a2a3a '+pct+'%)';
-}
-
-function styleBadge(el,delta){
-  if(delta>0){el.style.background='rgba(0,255,136,.15)';el.style.color='var(--green)';}
-  else if(delta===0){el.style.background='rgba(100,140,180,.1)';el.style.color='var(--dim)';}
-  else{el.style.background='rgba(255,50,50,.12)';el.style.color='var(--red)';}
-}
-
-function updateAllBadgeColors(){
-  setTimeout(function(){
-    ['fix-badge-shift'].forEach(function(id){
-      var el=document.getElementById(id);
-      if(!el) return;
-      var txt=el.textContent;
-      var m=txt.match(/([+-]?\d+) health/);
-      if(m) styleBadge(el,parseInt(m[1]));
-    });
-  },0);
 }
 
 // ─── Reset ───────────────────────────────────────────────────────────────────
