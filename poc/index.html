@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FloorCast — Manufacturing Digital Twin POC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="css/poc.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header id="header">
+    <h1>⬡ FloorCast &mdash; Digital Twin POC</h1>
+    <div class="status-bar">
+      <span>Machines: <b>8</b></span>
+      <span>Jobs Active: <b>12</b></span>
+      <span id="bottleneck-status">Bottlenecks: <b style="color:#ff3333">3</b></span>
+    </div>
+  </header>
+
+  <!-- 3D Canvas -->
+  <div id="canvas-wrap">
+    <canvas id="main-canvas"></canvas>
+  </div>
+
+  <!-- Timeline Scrubber -->
+  <div id="scrubber">
+    <button id="play-btn" title="Play/Pause">▶</button>
+    <span class="scrub-label">Now</span>
+    <input type="range" id="time-slider">
+    <span class="scrub-label">+6 Weeks</span>
+    <span id="day-label"></span>
+  </div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+
+    <!-- Active mutations summary -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Active Scenario</div>
+      <div id="active-mutations">
+        <div class="mutation-chip empty">No changes — showing base schedule</div>
+      </div>
+      <button class="btn danger" id="reset-btn">Reset All Changes</button>
+    </div>
+
+    <!-- Shift levers -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Add Evening Shift (+8h/day)</div>
+      <div id="shift-levers"></div>
+    </div>
+
+    <!-- Move Job -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Move Job to Different Machine</div>
+      <select id="job-select"></select>
+      <select id="target-machine-select"><option value="">— pick target —</option></select>
+      <button class="btn" id="move-job-btn">Move Job</button>
+    </div>
+
+    <!-- Downtime -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Schedule Downtime / Maintenance</div>
+      <select id="downtime-machine-select"></select>
+      <div class="date-row">
+        <input type="date" id="downtime-start">
+        <input type="date" id="downtime-end">
+      </div>
+      <button class="btn" id="downtime-btn">Add Downtime</button>
+    </div>
+
+  </aside>
+</div>
+
+<script type="module">
+import { initScene, setUtilization } from './js/scene.js';
+import { computeSchedule, TOTAL_DAYS } from './js/schedule.js';
+import { initScrubber, getCurrentDay } from './js/scrubber.js';
+import { initWhatIf, getMutations } from './js/whatif.js';
+
+// ── Bootstrap ──────────────────────────────────────────────────────────────
+const canvas = document.getElementById('main-canvas');
+canvas.width  = canvas.parentElement.clientWidth;
+canvas.height = canvas.parentElement.clientHeight;
+
+initScene(canvas);
+
+let currentSchedule = computeSchedule([]);
+let currentDay = 0;
+
+function refresh(day) {
+  // Slice the schedule to a single-day view: {machineId: [util]}
+  const slice = {};
+  for (const [id, arr] of Object.entries(currentSchedule)) {
+    slice[id] = [arr[day]];
+  }
+  setUtilization(slice);
+  updateBottleneckStatus(currentSchedule, day);
+  updateSliderGradient(day);
+}
+
+function updateBottleneckStatus(schedule, day) {
+  let count = 0;
+  for (const arr of Object.values(schedule)) {
+    if (arr[day] > 0.85) count++;
+  }
+  const el = document.getElementById('bottleneck-status');
+  const color = count > 2 ? '#ff3333' : count > 0 ? '#ffaa00' : '#00ff88';
+  el.innerHTML = `Bottlenecks: <b style="color:${color}">${count}</b>`;
+}
+
+function updateSliderGradient(day) {
+  const slider = document.getElementById('time-slider');
+  const pct = (day / (TOTAL_DAYS - 1)) * 100;
+  slider.style.background = `linear-gradient(to right, var(--cyan) ${pct}%, #1a2a4a ${pct}%)`;
+}
+
+function updateMutationChips(mutations) {
+  const container = document.getElementById('active-mutations');
+  if (!mutations.length) {
+    container.innerHTML = '<div class="mutation-chip empty">No changes — showing base schedule</div>';
+    return;
+  }
+  container.innerHTML = mutations.map(m => {
+    if (m.type === 'shift')    return `<div class="mutation-chip">⬆ Shift added: ${m.machineId}</div>`;
+    if (m.type === 'moveJob')  return `<div class="mutation-chip">⇄ ${m.jobId} → ${m.toMachineId}</div>`;
+    if (m.type === 'downtime') return `<div class="mutation-chip">⏸ Downtime: ${m.machineId} day ${m.startDay}–${m.endDay}</div>`;
+    return '';
+  }).join('');
+}
+
+// ── Wire up ────────────────────────────────────────────────────────────────
+initScrubber(day => {
+  currentDay = day;
+  refresh(currentDay);
+});
+
+initWhatIf(mutations => {
+  currentSchedule = computeSchedule(mutations);
+  updateMutationChips(mutations);
+  refresh(currentDay);
+});
+
+// Initial render
+refresh(0);
+</script>
+</body>
+</html>
