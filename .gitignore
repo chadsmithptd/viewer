@@ -1,8 +1,0 @@
-/uploads/
-/venv/
-server_logs.txt
-stepviewer.db
-temp/
-__pycache__/
-*.pyc
-.pytest_cache/
