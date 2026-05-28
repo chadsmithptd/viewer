@@ -837,11 +837,16 @@ function buildFlowArrows(){
 }
 
 var _activeFlowFilter=null;
-function applyFlowFilter(machineId){
-  _activeFlowFilter=machineId;
+// filter: null=show all, string=single machine, object=set of machineIds
+function applyFlowFilter(filter){
+  _activeFlowFilter=filter;
   flowConnections.forEach(function(conn){
-    var show=showFlows&&(machineId===null||conn.fromId===machineId||conn.toId===machineId);
-    conn.objects.forEach(function(o){o.visible=show;});
+    var show;
+    if(!showFlows) show=false;
+    else if(filter===null) show=true;
+    else if(typeof filter==='string') show=(conn.fromId===filter||conn.toId===filter);
+    else show=(filter[conn.fromId]||filter[conn.toId]);
+    conn.objects.forEach(function(o){o.visible=!!show;});
   });
 }
 
@@ -861,7 +866,8 @@ var _flowT=0;
 function animateFlowParticles(dt){
   _flowT+=dt;
   flowParticles.forEach(function(fp){
-    var shouldShow=showFlows&&(_activeFlowFilter===null||fp.fromId===_activeFlowFilter||fp.toId===_activeFlowFilter);
+    var f=_activeFlowFilter;
+    var shouldShow=showFlows&&(f===null||(typeof f==='string'?(fp.fromId===f||fp.toId===f):(f[fp.fromId]||f[fp.toId])));
     fp.mesh.visible=shouldShow;
     if(!shouldShow) return;
     fp.t=(fp.t+dt*0.18)%1;
@@ -1551,6 +1557,7 @@ function getJobMachineSet(job){
 function applyJobHighlight(job){
   if(!job){
     Object.values(machineObjects).forEach(function(o){ o.topMesh.material.emissiveIntensity=0.6; });
+    applyFlowFilter(null);
     return;
   }
   var touched=getJobMachineSet(job);
@@ -1558,6 +1565,7 @@ function applyJobHighlight(job){
     var obj=machineObjects[m.id];
     obj.topMesh.material.emissiveIntensity = touched[m.id] ? 0.6 : 0.18;
   });
+  applyFlowFilter(touched);
 }
 
 function getMachineName(id){
