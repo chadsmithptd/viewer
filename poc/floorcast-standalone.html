@@ -139,13 +139,38 @@ select:focus,input:focus{border-color:var(--cyan)}
 .ds-impact{font-size:10px;color:var(--amber)}
 .ds-ok{font-size:10px;color:var(--green)}
 
-/* fix options */
-.fix-row{display:flex;align-items:center;gap:8px;font-size:11px;padding:4px 0;border-bottom:1px solid rgba(0,180,255,.08)}
-.fix-row:last-child{border-bottom:none}
-.fix-label{flex:1;color:var(--text)}
-.fix-bar-wrap{width:80px;height:6px;background:#1a2a3a;border-radius:3px;overflow:hidden}
-.fix-bar{height:100%;border-radius:3px;transition:width .4s}
-.fix-days{font-size:10px;color:var(--dim);white-space:nowrap;min-width:52px;text-align:right}
+/* ── Score pill in drawer header ──────────────────────────────── */
+#score-display{display:flex;align-items:center;gap:14px;margin-left:20px}
+.score-block{display:flex;flex-direction:column;align-items:center;line-height:1}
+.score-val{font-size:22px;font-weight:700;letter-spacing:-.02em;transition:color .3s}
+.score-label{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-top:1px}
+.score-delta{font-size:11px;font-weight:600;min-width:40px;text-align:center}
+
+/* ── Fix option sliders ───────────────────────────────────────── */
+.fix-option{
+  display:flex;flex-direction:column;gap:4px;
+  padding:8px 10px;border-radius:5px;
+  background:rgba(0,180,255,.05);border:1px solid rgba(0,180,255,.12);
+  transition:border-color .2s,background .2s;
+}
+.fix-option:hover{border-color:rgba(0,180,255,.28);background:rgba(0,180,255,.09)}
+.fix-option-header{display:flex;align-items:center;justify-content:space-between}
+.fix-option-name{font-size:11px;font-weight:600;color:var(--text)}
+.fix-option-badge{
+  font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;
+  transition:background .3s,color .3s;
+}
+.fix-slider-row{display:flex;align-items:center;gap:8px}
+.fix-slider-label{font-size:10px;color:var(--dim);white-space:nowrap;min-width:64px}
+.fix-slider{
+  flex:1;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;cursor:pointer;
+  background:linear-gradient(to right,var(--cyan) 0%,#1a2a3a 0%);
+}
+.fix-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;width:12px;height:12px;border-radius:50%;
+  background:var(--cyan);cursor:pointer;box-shadow:0 0 5px rgba(0,200,255,.6);
+}
+.fix-slider-val{font-size:10px;color:var(--cyan);min-width:28px;text-align:right}
 </style>
 </head>
 <body>
@@ -198,6 +223,17 @@ select:focus,input:focus{border-color:var(--cyan)}
 <div id="detail-drawer">
   <div id="drawer-header">
     <span id="drawer-machine-name">—</span>
+    <div id="score-display">
+      <div class="score-block">
+        <span class="score-val" id="score-health">—</span>
+        <span class="score-label">Shop Health</span>
+      </div>
+      <div class="score-block">
+        <span class="score-val" id="score-jobs">—</span>
+        <span class="score-label">Jobs On-Time</span>
+      </div>
+      <span class="score-delta" id="score-delta"></span>
+    </div>
     <button id="drawer-close">✕</button>
   </div>
   <div id="drawer-body">
@@ -210,8 +246,8 @@ select:focus,input:focus{border-color:var(--cyan)}
       <div id="drawer-downstream-list"></div>
     </div>
     <div class="drawer-panel" id="drawer-fix-panel">
-      <div class="drawer-panel-title">⚡ Fix Options — Days Over 85%</div>
-      <div id="drawer-fix-list"></div>
+      <div class="drawer-panel-title">⚡ Fix Options — drag to tune, watch the floor react</div>
+      <div id="drawer-fix-list" style="display:flex;flex-direction:column;gap:6px;overflow-y:auto"></div>
     </div>
   </div>
 </div>
@@ -421,10 +457,14 @@ var DEPT_AREAS=[
 ];
 var DOWNSTREAM={M1:['M3','M4'],M2:['M3','M4','M5'],M3:['M6'],M4:['M6'],M5:['M6'],M6:['M7','M8'],M7:[],M8:[]};
 var JOBS=[
-  {id:'JOB-101',name:'Shaft Assembly', fromMachine:'M3',load:0.35},
-  {id:'JOB-102',name:'Bracket Set',    fromMachine:'M4',load:0.28},
-  {id:'JOB-103',name:'Impeller Rough', fromMachine:'M1',load:0.40},
-  {id:'JOB-104',name:'Housing Bore',   fromMachine:'M2',load:0.22},
+  {id:'JOB-101',name:'Shaft Assembly', fromMachine:'M3',load:0.35,dueDay:14,qty:40},
+  {id:'JOB-102',name:'Bracket Set',    fromMachine:'M4',load:0.28,dueDay:18,qty:25},
+  {id:'JOB-103',name:'Impeller Rough', fromMachine:'M1',load:0.40,dueDay:10,qty:12},
+  {id:'JOB-104',name:'Housing Bore',   fromMachine:'M2',load:0.22,dueDay:21,qty:30},
+  {id:'JOB-105',name:'Valve Body',     fromMachine:'M3',load:0.20,dueDay:28,qty:8},
+  {id:'JOB-106',name:'End Cap Set',    fromMachine:'M5',load:0.25,dueDay:16,qty:60},
+  {id:'JOB-107',name:'Pump Housing',   fromMachine:'M4',load:0.30,dueDay:25,qty:6},
+  {id:'JOB-108',name:'Gear Blank',     fromMachine:'M1',load:0.18,dueDay:12,qty:100},
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -485,9 +525,10 @@ function applyShift(s,m){
 }
 function applyMoveJob(s,m){
   var job=JOBS.filter(function(j){return j.id===m.jobId})[0]; if(!job) return;
+  var frac=m.loadFraction!==undefined?m.loadFraction:1.0;
   for(var d=0;d<TOTAL_DAYS;d++){
-    s[job.fromMachine][d]=clamp(s[job.fromMachine][d]-job.load*0.8);
-    s[m.toMachineId][d]=clamp(s[m.toMachineId][d]+job.load*0.85);
+    s[job.fromMachine][d]=clamp(s[job.fromMachine][d]-job.load*0.8*frac);
+    s[m.toMachineId][d]=clamp(s[m.toMachineId][d]+job.load*0.85*frac);
   }
 }
 function applyDowntime(s,m){
@@ -798,12 +839,20 @@ var drawer=document.getElementById('detail-drawer');
 document.getElementById('drawer-close').addEventListener('click',function(){
   drawer.classList.remove('open');
   drawerMachineId=null;
-  // un-highlight all machines
+  drawerSliders={shiftHours:0,moveJobId:null,movePct:0};
+  for(var i=mutations.length-1;i>=0;i--){if(mutations[i]._fromDrawer)mutations.splice(i,1);}
+  recompute();
   Object.values(machineObjects).forEach(function(o){ o.group.scale.set(1,1,1); });
 });
 
 function openDrawer(machineId){
   drawerMachineId=machineId;
+  // reset slider state for new machine
+  if(!drawerSliders._lastMachine||drawerSliders._lastMachine!==machineId){
+    drawerSliders={shiftHours:0,moveJobId:null,movePct:0,_lastMachine:machineId};
+    // remove any pending drawer mutations
+    for(var i=mutations.length-1;i>=0;i--){if(mutations[i]._fromDrawer)mutations.splice(i,1);}
+  }
   var m=MACHINES.filter(function(m){return m.id===machineId;})[0];
   document.getElementById('drawer-machine-name').textContent=m.name+' — '+m.dept;
   drawer.classList.add('open');
@@ -920,57 +969,203 @@ function renderDownstream(machineId){
   list.innerHTML=html;
 }
 
+// ── Health scoring engine ─────────────────────────────────────────────────────
+function scoreSchedule(sched){
+  // Shop health 0-100
+  // Deduct for overloaded machine-days (weighted by severity)
+  var penalty=0;
+  Object.values(sched).forEach(function(arr){
+    arr.forEach(function(u){
+      if(u>0.85) penalty+=(u-0.85)*4;   // overload
+      if(u>1.0)  penalty+=(u-1.0)*8;    // severely over
+    });
+  });
+  var health=Math.max(0,Math.round(100-penalty*10));
+
+  // Jobs on time: a job is on time if its machine's avg util in the window before due date
+  // is low enough that work isn't backlogged past the due date
+  var onTime=0;
+  JOBS.forEach(function(j){
+    var arr=sched[j.fromMachine];
+    // average utilization from day 0 to dueDay
+    var sum=0, n=Math.min(j.dueDay,arr.length);
+    for(var d=0;d<n;d++) sum+=arr[d];
+    var avgUtil=sum/n;
+    // if avg util is < 0.88 in the window, job ships on time
+    if(avgUtil<0.88) onTime++;
+  });
+  return {health:health, onTime:onTime, total:JOBS.length};
+}
+
+// per-drawer slider state: { shiftHours, moveJobId, movePct }
+var drawerSliders={shiftHours:0, moveJobId:null, movePct:0};
+
+function buildDrawerMutations(machineId){
+  var muts=[];
+  if(drawerSliders.shiftHours>0){
+    var mult=8/(8+drawerSliders.shiftHours);
+    muts.push({type:'shift',machineId:machineId,startDay:0,endDay:TOTAL_DAYS-1,capacityMultiplier:mult});
+  }
+  if(drawerSliders.moveJobId&&drawerSliders.movePct>0){
+    var job=JOBS.filter(function(j){return j.id===drawerSliders.moveJobId;})[0];
+    if(job){
+      var bestMid=findBestTarget(machineId);
+      muts.push({type:'moveJob',jobId:job.id,toMachineId:bestMid,loadFraction:drawerSliders.movePct/100});
+    }
+  }
+  return muts;
+}
+
+function findBestTarget(excludeId){
+  var best=null,bv=99;
+  MACHINES.forEach(function(m){
+    if(m.id===excludeId) return;
+    var avg=0; currentSchedule[m.id].forEach(function(v){avg+=v;}); avg/=TOTAL_DAYS;
+    if(avg<bv){bv=avg;best=m.id;}
+  });
+  return best;
+}
+
+function applyDrawerFixes(machineId){
+  // merge drawer mutations into global mutations list
+  // remove old drawer-sourced mutations first
+  for(var i=mutations.length-1;i>=0;i--){
+    if(mutations[i]._fromDrawer) mutations.splice(i,1);
+  }
+  var dm=buildDrawerMutations(machineId);
+  dm.forEach(function(m){m._fromDrawer=true; mutations.push(m);});
+  recompute();
+  renderScoreHeader(machineId);
+}
+
+function renderScoreHeader(machineId){
+  var base=scoreSchedule(BASE_SCHEDULE);
+  var current=scoreSchedule(currentSchedule);
+  var hEl=document.getElementById('score-health');
+  var jEl=document.getElementById('score-jobs');
+  var dEl=document.getElementById('score-delta');
+  hEl.textContent=current.health;
+  hEl.style.color=current.health>=80?'var(--green)':current.health>=55?'var(--amber)':'var(--red)';
+  jEl.textContent=current.onTime+'/'+current.total;
+  jEl.style.color=current.onTime===current.total?'var(--green)':current.onTime>=current.total*0.7?'var(--amber)':'var(--red)';
+  var delta=current.health-base.health;
+  dEl.textContent=(delta>=0?'+':'')+delta+' pts';
+  dEl.style.color=delta>0?'var(--green)':delta<0?'var(--red)':'var(--dim)';
+}
+
 function renderFixOptions(machineId){
   var list=document.getElementById('drawer-fix-list');
-  var arr=currentSchedule[machineId];
-  function daysOver(a){var n=0;for(var d=0;d<a.length;d++){if(a[d]>0.85)n++;}return n;}
-  var baseOver=daysOver(arr);
-  // Option 1: add evening shift
-  var shiftMut=[{type:'shift',machineId:machineId,startDay:0,endDay:TOTAL_DAYS-1,capacityMultiplier:0.62}];
-  var shiftSched=computeSchedule(mutations.concat(shiftMut));
-  var shiftOver=daysOver(shiftSched[machineId]);
-  // Option 2: move the first job assigned to this machine (if any)
   var jobsHere=JOBS.filter(function(j){return j.fromMachine===machineId;});
-  var moveOver=baseOver, moveLabel='No movable jobs';
+  var bestTarget=findBestTarget(machineId);
+  var bestTargetName=bestTarget?MACHINES.filter(function(m){return m.id===bestTarget;})[0].name:'—';
+
+  list.innerHTML='';
+
+  // ── Option 1: Evening shift slider ──────────────────────────
+  var shiftDiv=document.createElement('div'); shiftDiv.className='fix-option';
+  var shiftScore=previewScore(machineId,[{type:'shift',machineId:machineId,startDay:0,endDay:TOTAL_DAYS-1,capacityMultiplier:8/16}]);
+  shiftDiv.innerHTML=
+    '<div class="fix-option-header">'
+    +'<span class="fix-option-name">Evening Shift — add capacity to this machine</span>'
+    +'<span class="fix-option-badge" id="fix-badge-shift">+'+shiftScore.dh+' health &middot; +'+shiftScore.dj+' jobs</span>'
+    +'</div>'
+    +'<div class="fix-slider-row">'
+    +'<span class="fix-slider-label">Hours added</span>'
+    +'<input type="range" class="fix-slider" id="fix-slider-shift" min="0" max="12" step="1" value="'+drawerSliders.shiftHours+'">'
+    +'<span class="fix-slider-val" id="fix-val-shift">'+drawerSliders.shiftHours+'h</span>'
+    +'</div>';
+  list.appendChild(shiftDiv);
+
+  // ── Option 2: Move job slider (only if jobs exist here) ─────
   if(jobsHere.length){
-    // find best alternate machine (lowest avg util)
-    var bestMid=null, bestUtil=99;
-    MACHINES.forEach(function(m){
-      if(m.id===machineId) return;
-      var avg=0; currentSchedule[m.id].forEach(function(v){avg+=v;}); avg/=TOTAL_DAYS;
-      if(avg<bestUtil){bestUtil=avg;bestMid=m.id;}
+    jobsHere.forEach(function(job){
+      var jDiv=document.createElement('div'); jDiv.className='fix-option';
+      var moveScore=previewScore(machineId,[{type:'moveJob',jobId:job.id,toMachineId:bestTarget}]);
+      var pct=drawerSliders.moveJobId===job.id?drawerSliders.movePct:0;
+      jDiv.innerHTML=
+        '<div class="fix-option-header">'
+        +'<span class="fix-option-name">Move "'+job.name+'" → '+bestTargetName+'</span>'
+        +'<span class="fix-option-badge" id="fix-badge-move-'+job.id+'">+'+moveScore.dh+' health &middot; +'+moveScore.dj+' jobs</span>'
+        +'</div>'
+        +'<div class="fix-slider-row">'
+        +'<span class="fix-slider-label">% of load moved</span>'
+        +'<input type="range" class="fix-slider" id="fix-slider-move-'+job.id+'" min="0" max="100" step="5" value="'+pct+'">'
+        +'<span class="fix-slider-val" id="fix-val-move-'+job.id+'">'+pct+'%</span>'
+        +'</div>';
+      list.appendChild(jDiv);
+
+      // wire slider
+      (function(j){
+        setTimeout(function(){
+          var sl=document.getElementById('fix-slider-move-'+j.id);
+          if(!sl) return;
+          updateSliderTrack(sl);
+          sl.addEventListener('input',function(){
+            drawerSliders.moveJobId=j.id;
+            drawerSliders.movePct=parseInt(sl.value);
+            document.getElementById('fix-val-move-'+j.id).textContent=sl.value+'%';
+            updateSliderTrack(sl);
+            applyDrawerFixes(machineId);
+            renderDrawerCharts(machineId);
+          });
+        },0);
+      })(job);
     });
-    var moveMut=[{type:'moveJob',jobId:jobsHere[0].id,toMachineId:bestMid}];
-    var moveSched=computeSchedule(mutations.concat(moveMut));
-    moveOver=daysOver(moveSched[machineId]);
-    var destName=MACHINES.filter(function(m){return m.id===bestMid;})[0].name;
-    moveLabel='Move "'+jobsHere[0].name+'" → '+destName;
   }
-  // Option 3: combine both
-  var bothMut=shiftMut.concat(jobsHere.length?[{type:'moveJob',jobId:jobsHere[0].id,toMachineId:(function(){var b=null,bv=99;MACHINES.forEach(function(m){if(m.id===machineId)return;var a=0;currentSchedule[m.id].forEach(function(v){a+=v;});a/=TOTAL_DAYS;if(a<bv){bv=a;b=m.id;}});return b;})()}]:[]);
-  var bothSched=computeSchedule(mutations.concat(bothMut));
-  var bothOver=daysOver(bothSched[machineId]);
 
-  var maxOver=Math.max(baseOver,1);
-  function barWidth(v){return Math.round((v/maxOver)*100);}
-  function barColor(v){return v>baseOver*0.7?'var(--red)':v>baseOver*0.3?'var(--amber)':'var(--green)';}
-  function saved(v){var s=baseOver-v; return s>0?'−'+s+' days overloaded':s===0?'no change':'worse';}
+  // wire shift slider
+  setTimeout(function(){
+    var sl=document.getElementById('fix-slider-shift');
+    if(!sl) return;
+    updateSliderTrack(sl);
+    sl.addEventListener('input',function(){
+      drawerSliders.shiftHours=parseInt(sl.value);
+      document.getElementById('fix-val-shift').textContent=sl.value+'h';
+      updateSliderTrack(sl);
+      // update badge preview
+      if(sl.value>0){
+        var mult=8/(8+parseInt(sl.value));
+        var s=previewScore(machineId,[{type:'shift',machineId:machineId,startDay:0,endDay:TOTAL_DAYS-1,capacityMultiplier:mult}]);
+        var b=document.getElementById('fix-badge-shift');
+        if(b){b.textContent=(s.dh>=0?'+':'')+s.dh+' health · '+(s.dj>=0?'+':'')+s.dj+' jobs'; styleBadge(b,s.dh);}
+      }
+      applyDrawerFixes(machineId);
+      renderDrawerCharts(machineId);
+    });
+  },0);
 
-  var html='';
-  var rows=[
-    {label:'Do nothing (base)',       days:baseOver, barW:barWidth(baseOver), col:'var(--red)'},
-    {label:'Add evening shift',        days:shiftOver,barW:barWidth(shiftOver),col:barColor(shiftOver)},
-    {label:moveLabel,                  days:moveOver, barW:barWidth(moveOver), col:barColor(moveOver)},
-    {label:'Shift + move job',         days:bothOver, barW:barWidth(bothOver), col:barColor(bothOver)},
-  ];
-  rows.forEach(function(r){
-    html+='<div class="fix-row">'
-      +'<span class="fix-label">'+r.label+'</span>'
-      +'<div class="fix-bar-wrap"><div class="fix-bar" style="width:'+r.barW+'%;background:'+r.col+'"></div></div>'
-      +'<span class="fix-days">'+r.days+' days</span>'
-      +'</div>';
-  });
-  list.innerHTML=html;
+  renderScoreHeader(machineId);
+  updateAllBadgeColors();
+}
+
+function previewScore(machineId, extraMuts){
+  var base=scoreSchedule(currentSchedule);
+  var preview=computeSchedule(mutations.filter(function(m){return !m._fromDrawer;}).concat(extraMuts));
+  var after=scoreSchedule(preview);
+  return {dh:after.health-base.health, dj:after.onTime-base.onTime};
+}
+
+function updateSliderTrack(sl){
+  var pct=(sl.value-sl.min)/(sl.max-sl.min)*100;
+  sl.style.background='linear-gradient(to right,var(--cyan) '+pct+'%,#1a2a3a '+pct+'%)';
+}
+
+function styleBadge(el,delta){
+  if(delta>0){el.style.background='rgba(0,255,136,.15)';el.style.color='var(--green)';}
+  else if(delta===0){el.style.background='rgba(100,140,180,.1)';el.style.color='var(--dim)';}
+  else{el.style.background='rgba(255,50,50,.12)';el.style.color='var(--red)';}
+}
+
+function updateAllBadgeColors(){
+  setTimeout(function(){
+    ['fix-badge-shift'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(!el) return;
+      var txt=el.textContent;
+      var m=txt.match(/([+-]?\d+) health/);
+      if(m) styleBadge(el,parseInt(m[1]));
+    });
+  },0);
 }
 
 // ─── Reset ───────────────────────────────────────────────────────────────────
