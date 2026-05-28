@@ -112,6 +112,18 @@ select:focus,input:focus{border-color:var(--cyan)}
   z-index:20;display:flex;flex-direction:column;
 }
 #detail-drawer.open{height:240px}
+#detail-drawer.dragging{transition:none}
+/* drag handle at top of drawer */
+#drawer-resize-handle{
+  position:absolute;top:0;left:0;right:0;height:6px;
+  cursor:ns-resize;z-index:5;
+  background:transparent;
+  border-top:2px solid rgba(0,180,255,0.35);
+}
+#drawer-resize-handle::after{
+  content:'';position:absolute;left:50%;top:1px;transform:translateX(-50%);
+  width:40px;height:3px;border-radius:2px;background:rgba(0,180,255,0.4);
+}
 #drawer-header{
   display:flex;align-items:center;gap:16px;padding:10px 18px 6px;
   border-bottom:1px solid var(--border);flex-shrink:0;
@@ -191,6 +203,7 @@ select:focus,input:focus{border-color:var(--cyan)}
       <span>Machines: <b>8</b></span>
       <span>Jobs Active: <b>12</b></span>
       <span id="bottleneck-status">Bottlenecks: <b style="color:#ff3333">3</b></span>
+      <button id="flows-toggle" title="Show/hide flow pipes" style="background:rgba(0,200,255,.12);border:1px solid var(--cyan);color:var(--cyan);font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;letter-spacing:.06em;">⇝ Flows ON</button>
     </div>
   </header>
   <div id="canvas-wrap"><canvas id="main-canvas"></canvas></div>
@@ -231,6 +244,7 @@ select:focus,input:focus{border-color:var(--cyan)}
 
 <!-- Detail drawer (outside grid, fixed position) -->
 <div id="detail-drawer">
+  <div id="drawer-resize-handle"></div>
   <div id="drawer-header">
     <span id="drawer-machine-name">—</span>
     <div id="score-display">
@@ -657,6 +671,7 @@ function setUtilization(utilMap){
     obj.topMesh.material.emissiveIntensity=u>0.85?0.6:0.3;
     obj.badge.querySelector('.badge-util').innerHTML=utilLabel(u);
   });
+  updateFlowColors(utilMap);
 }
 
 function drawAllSparklines(){
@@ -710,13 +725,211 @@ window.addEventListener('resize',function(){
   renderer.setSize(W(),H()); labelRenderer.setSize(W(),H());
 });
 
-var _pt=0;
+// ─── Flow arrows (Sankey-like pipes between machines) ────────────────────────
+var flowObjects=[];
+var flowParticles=[];
+var showFlows=true;
+
+function getMachinePos(id){
+  var obj=machineObjects[id];
+  return obj ? obj.group.position : new THREE.Vector3(0,0,0);
+}
+
+function buildFlowArrows(){
+  // remove old
+  flowObjects.forEach(function(o){scene.remove(o);});
+  flowObjects=[];
+  flowParticles=[];
+
+  Object.keys(DOWNSTREAM).forEach(function(fromId){
+    DOWNSTREAM[fromId].forEach(function(toId){
+      var from=getMachinePos(fromId).clone();
+      var to=getMachinePos(toId).clone();
+      from.y=0.12; to.y=0.12;
+
+      // mid-point arc — lift middle point up for a gentle arc
+      var mid=from.clone().add(to).multiplyScalar(0.5);
+      mid.y=0.8;
+
+      // Build a smooth tube along a quadratic bezier approximated by CatmullRom
+      var steps=8;
+      var pts=[];
+      for(var i=0;i<=steps;i++){
+        var t=i/steps;
+        // quadratic bezier: P(t)=(1-t)^2*P0 + 2(1-t)t*P1 + t^2*P2
+        var u=1-t;
+        var p=new THREE.Vector3(
+          u*u*from.x + 2*u*t*mid.x + t*t*to.x,
+          u*u*from.y + 2*u*t*mid.y + t*t*to.y,
+          u*u*from.z + 2*u*t*mid.z + t*t*to.z
+        );
+        pts.push(p);
+      }
+      var curve=new THREE.CatmullRomCurve3(pts);
+
+      // Use tube geometry; radius driven by utilization later
+      var tubeGeo=new THREE.TubeGeometry(curve,16,0.045,5,false);
+      var tubeMat=new THREE.MeshBasicMaterial({
+        color:0x00c8ff,transparent:true,opacity:0.35,depthWrite:false
+      });
+      var tube=new THREE.Mesh(tubeGeo,tubeMat);
+      scene.add(tube);
+      flowObjects.push(tube);
+
+      // arrowhead cone at destination end
+      var coneGeo=new THREE.ConeGeometry(0.08,0.25,6);
+      var coneMat=new THREE.MeshBasicMaterial({color:0x00c8ff,transparent:true,opacity:0.55});
+      var cone=new THREE.Mesh(coneGeo,coneMat);
+      // orient cone along direction of curve end
+      var endTangent=curve.getTangent(1).normalize();
+      cone.position.copy(to);
+      cone.position.y=0.2;
+      var axis=new THREE.Vector3(0,1,0);
+      cone.quaternion.setFromUnitVectors(axis,endTangent);
+      scene.add(cone);
+      flowObjects.push(cone);
+
+      // particles — small spheres that travel along curve
+      var numParticles=3;
+      for(var p=0;p<numParticles;p++){
+        var pGeo=new THREE.SphereGeometry(0.045,4,4);
+        var pMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.7});
+        var pMesh=new THREE.Mesh(pGeo,pMat);
+        scene.add(pMesh);
+        flowObjects.push(pMesh);
+        flowParticles.push({mesh:pMesh, curve:curve, t:(p/numParticles), fromId:fromId, toId:toId, tubeMat:tubeMat, coneMat:coneMat});
+      }
+    });
+  });
+}
+
+function updateFlowColors(utilMap){
+  // update tube/cone colors based on source machine utilization
+  flowParticles.forEach(function(fp){
+    var u=utilMap[fp.fromId]||0;
+    var col=heatColor(u);
+    fp.tubeMat.color.copy(col);
+    fp.tubeMat.opacity=0.15+u*0.45;
+    fp.coneMat.color.copy(col);
+    fp.coneMat.opacity=0.4+u*0.4;
+  });
+}
+
+var _flowT=0;
+function animateFlowParticles(dt){
+  if(!showFlows) return;
+  _flowT+=dt;
+  flowParticles.forEach(function(fp){
+    fp.t=(fp.t+dt*0.18)%1;
+    var pos=fp.curve.getPoint(fp.t);
+    fp.mesh.position.copy(pos);
+    // color matches source util
+    var u=machineObjects[fp.fromId]?machineObjects[fp.fromId].utilValue:0;
+    fp.mesh.material.color.copy(heatColor(u));
+    fp.mesh.visible=showFlows;
+  });
+  // also hide/show tubes/cones
+  flowObjects.forEach(function(o){o.visible=showFlows;});
+}
+
+buildFlowArrows();
+
+// ─── Machine dragging on floor ──────────────────────────────────────────────
+var dragState=null;
+var floorPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+var raycaster=new THREE.Raycaster();
+var _mouse=new THREE.Vector2();
+
+function getMachineGroupsArray(){
+  return MACHINES.map(function(m){return machineObjects[m.id].group;});
+}
+
+renderer.domElement.addEventListener('pointerdown',function(e){
+  if(e.button!==0) return;
+  var rect=renderer.domElement.getBoundingClientRect();
+  _mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
+  _mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(_mouse,camera);
+
+  // Check intersection with machine groups (hit any child mesh)
+  var allMeshes=[];
+  MACHINES.forEach(function(m){
+    var g=machineObjects[m.id].group;
+    g.traverse(function(child){ if(child.isMesh) allMeshes.push(child); });
+  });
+  var hits=raycaster.intersectObjects(allMeshes,false);
+  if(!hits.length) return;
+
+  // find which machine was hit
+  var hitObj=hits[0].object;
+  var hitMachineId=null;
+  MACHINES.forEach(function(m){
+    machineObjects[m.id].group.traverse(function(child){
+      if(child===hitObj) hitMachineId=m.id;
+    });
+  });
+  if(!hitMachineId) return;
+
+  e.stopPropagation();
+  dragState={machineId:hitMachineId, active:true};
+  controls.enabled=false;
+  renderer.domElement.style.cursor='grabbing';
+});
+
+renderer.domElement.addEventListener('pointermove',function(e){
+  if(!dragState||!dragState.active) return;
+  var rect=renderer.domElement.getBoundingClientRect();
+  _mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
+  _mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(_mouse,camera);
+
+  var target=new THREE.Vector3();
+  raycaster.ray.intersectPlane(floorPlane,target);
+  if(!target) return;
+
+  var obj=machineObjects[dragState.machineId];
+  obj.group.position.x=target.x;
+  obj.group.position.z=target.z;
+
+  // update MACHINES data
+  var mData=MACHINES.filter(function(m){return m.id===dragState.machineId;})[0];
+  mData.x=target.x; mData.z=target.z;
+
+  // rebuild flow arrows so they follow
+  buildFlowArrows();
+});
+
+renderer.domElement.addEventListener('pointerup',function(e){
+  if(!dragState) return;
+  dragState=null;
+  controls.enabled=true;
+  renderer.domElement.style.cursor='';
+});
+
+renderer.domElement.addEventListener('mousemove',function(e){
+  if(dragState&&dragState.active) return;
+  var rect=renderer.domElement.getBoundingClientRect();
+  _mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
+  _mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(_mouse,camera);
+  var allMeshes=[];
+  MACHINES.forEach(function(m){
+    machineObjects[m.id].group.traverse(function(child){ if(child.isMesh) allMeshes.push(child); });
+  });
+  var hits=raycaster.intersectObjects(allMeshes,false);
+  renderer.domElement.style.cursor=hits.length?'grab':'';
+});
+
+var _pt=0, _prevTime=performance.now();
 function animate(){
   requestAnimationFrame(animate);
   controls.update(); _pt+=0.02;
+  var now=performance.now();
+  var dt=(now-_prevTime)/1000; _prevTime=now;
   Object.values(machineObjects).forEach(function(obj){
     if(obj.utilValue>0.85) obj.topMesh.material.emissiveIntensity=0.3+0.5*(0.5+0.5*Math.sin(_pt*3+obj.pulsePhase));
   });
+  animateFlowParticles(dt);
   renderer.render(scene,camera);
   labelRenderer.render(scene,camera);
 }
@@ -1236,12 +1449,47 @@ function updateSliderTrack(sl){
   sl.style.background='linear-gradient(to right,var(--cyan) '+pct+'%,#1a2a3a '+pct+'%)';
 }
 
+// ─── Drawer resize handle ────────────────────────────────────────────────────
+(function(){
+  var handle=document.getElementById('drawer-resize-handle');
+  var drw=document.getElementById('detail-drawer');
+  var resizing=false, startY=0, startH=0;
+  handle.addEventListener('pointerdown',function(e){
+    if(!drw.classList.contains('open')) return;
+    resizing=true;
+    startY=e.clientY;
+    startH=drw.offsetHeight;
+    drw.classList.add('dragging');
+    document.body.style.userSelect='none';
+    e.preventDefault();
+  });
+  document.addEventListener('pointermove',function(e){
+    if(!resizing) return;
+    var dy=startY-e.clientY; // drag up = increase height
+    var newH=Math.max(120,Math.min(window.innerHeight*0.75, startH+dy));
+    drw.style.height=newH+'px';
+  });
+  document.addEventListener('pointerup',function(){
+    if(!resizing) return;
+    resizing=false;
+    drw.classList.remove('dragging');
+    document.body.style.userSelect='';
+  });
+})();
+
 // ─── Reset ───────────────────────────────────────────────────────────────────
 document.getElementById('reset-btn').addEventListener('click',function(){
   mutations.length=0;
   document.querySelectorAll('.shift-toggle').forEach(function(el){el.checked=false;document.getElementById('sh-'+el.dataset.id).textContent='';});
   jobSel.value=''; tgtSel.innerHTML='<option value="">— pick target —</option>'; dtSel.value='';
   recompute();
+});
+
+document.getElementById('flows-toggle').addEventListener('click',function(){
+  showFlows=!showFlows;
+  this.textContent='⇝ Flows '+(showFlows?'ON':'OFF');
+  this.style.opacity=showFlows?'1':'0.5';
+  flowObjects.forEach(function(o){o.visible=showFlows;});
 });
 
 refresh();
