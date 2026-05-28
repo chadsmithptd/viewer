@@ -13,14 +13,17 @@ export function initScene(canvas) {
   scene.fog = new THREE.FogExp2(0x0a0e1a, 0.025);
 
   // Camera — isometric-ish perspective
-  const w = canvas.clientWidth, h = canvas.clientHeight;
+  // Use the parent container dimensions since canvas CSS size may not be resolved yet
+  const wrap = canvas.parentElement;
+  const w = wrap.offsetWidth || window.innerWidth - 280;
+  const h = wrap.offsetHeight || window.innerHeight - 48 - 80;
   camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 200);
   camera.position.set(14, 14, 14);
   camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(w, h);
+  renderer.setSize(w, h, false);  // false = don't set canvas CSS size (CSS controls it)
   renderer.shadowMap.enabled = true;
 
   labelRenderer = new CSS2DRenderer();
@@ -57,10 +60,10 @@ export function initScene(canvas) {
 
   // Resize handler
   window.addEventListener('resize', () => {
-    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const w = wrap.offsetWidth, h = wrap.offsetHeight;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
+    renderer.setSize(w, h, false);
     labelRenderer.setSize(w, h);
   });
 

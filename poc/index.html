@@ -83,9 +83,6 @@ import { initWhatIf, getMutations } from './js/whatif.js';
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 const canvas = document.getElementById('main-canvas');
-canvas.width  = canvas.parentElement.clientWidth;
-canvas.height = canvas.parentElement.clientHeight;
-
 initScene(canvas);
 
 let currentSchedule = computeSchedule([]);
