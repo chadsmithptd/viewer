@@ -98,6 +98,54 @@ select:focus,input:focus{border-color:var(--cyan)}
   border-radius:4px;padding:3px 8px;color:var(--text);
 }
 .mutation-chip.empty{color:var(--dim);font-style:italic}
+
+/* ── Sparkline badges ─────────────────────────────────────────── */
+.badge-spark{display:block;margin-top:3px;cursor:pointer}
+
+/* ── Detail drawer ────────────────────────────────────────────── */
+#detail-drawer{
+  position:fixed;left:0;right:280px;bottom:0;
+  height:0;overflow:hidden;
+  background:rgba(6,12,26,0.97);
+  border-top:1px solid var(--border);
+  transition:height .28s cubic-bezier(.4,0,.2,1);
+  z-index:20;display:flex;flex-direction:column;
+}
+#detail-drawer.open{height:240px}
+#drawer-header{
+  display:flex;align-items:center;gap:16px;padding:10px 18px 6px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+}
+#drawer-machine-name{font-size:13px;font-weight:600;color:var(--cyan);letter-spacing:.06em}
+#drawer-close{
+  margin-left:auto;background:none;border:none;color:var(--dim);font-size:18px;
+  cursor:pointer;line-height:1;padding:2px 6px;border-radius:3px;
+}
+#drawer-close:hover{color:var(--text)}
+#drawer-body{flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;overflow:hidden}
+.drawer-panel{padding:10px 16px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:6px;overflow:hidden}
+.drawer-panel:last-child{border-right:none}
+.drawer-panel-title{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);margin-bottom:2px}
+.drawer-panel canvas{width:100%!important;display:block}
+
+/* downstream list */
+.downstream-row{
+  display:flex;align-items:center;gap:8px;font-size:11px;padding:3px 0;
+  border-bottom:1px solid rgba(0,180,255,.08);
+}
+.downstream-row:last-child{border-bottom:none}
+.ds-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ds-name{flex:1;color:var(--text)}
+.ds-impact{font-size:10px;color:var(--amber)}
+.ds-ok{font-size:10px;color:var(--green)}
+
+/* fix options */
+.fix-row{display:flex;align-items:center;gap:8px;font-size:11px;padding:4px 0;border-bottom:1px solid rgba(0,180,255,.08)}
+.fix-row:last-child{border-bottom:none}
+.fix-label{flex:1;color:var(--text)}
+.fix-bar-wrap{width:80px;height:6px;background:#1a2a3a;border-radius:3px;overflow:hidden}
+.fix-bar{height:100%;border-radius:3px;transition:width .4s}
+.fix-days{font-size:10px;color:var(--dim);white-space:nowrap;min-width:52px;text-align:right}
 </style>
 </head>
 <body>
@@ -144,6 +192,28 @@ select:focus,input:focus{border-color:var(--cyan)}
       <button class="btn" id="downtime-btn">Add Downtime</button>
     </div>
   </aside>
+</div>
+
+<!-- Detail drawer (outside grid, fixed position) -->
+<div id="detail-drawer">
+  <div id="drawer-header">
+    <span id="drawer-machine-name">—</span>
+    <button id="drawer-close">✕</button>
+  </div>
+  <div id="drawer-body">
+    <div class="drawer-panel" id="drawer-timeline-panel">
+      <div class="drawer-panel-title">📈 42-Day Load Forecast</div>
+      <canvas id="drawer-timeline-canvas" height="140"></canvas>
+    </div>
+    <div class="drawer-panel" id="drawer-downstream-panel">
+      <div class="drawer-panel-title">⬇ What This Blocks Downstream</div>
+      <div id="drawer-downstream-list"></div>
+    </div>
+    <div class="drawer-panel" id="drawer-fix-panel">
+      <div class="drawer-panel-title">⚡ Fix Options — Days Over 85%</div>
+      <div id="drawer-fix-list"></div>
+    </div>
+  </div>
 </div>
 
 <!-- Three.js r148 UMD — works with file:// -->
@@ -517,9 +587,15 @@ MACHINES.forEach(function(m){
   strip.position.set(0,-.15,.55);
   var group=new THREE.Group(); group.add(body,top,strip); group.position.set(m.x,.35,m.z); scene.add(group);
   var badge=document.createElement('div'); badge.className='machine-badge';
+  var sparkCanvas=document.createElement('canvas');
+  sparkCanvas.className='badge-spark'; sparkCanvas.width=64; sparkCanvas.height=20;
+  sparkCanvas.title='Click for detail'; sparkCanvas.style.pointerEvents='auto';
   badge.innerHTML='<span class="badge-name">'+m.name+'</span><span class="badge-util">—</span>';
+  badge.appendChild(sparkCanvas);
+  // click on badge opens drawer
+  (function(mid){ sparkCanvas.addEventListener('click',function(e){e.stopPropagation();openDrawer(mid);}); })(m.id);
   var label=new THREE.CSS2DObject(badge); label.position.set(0,1.1,0); group.add(label);
-  machineObjects[m.id]={group:group,topMesh:top,badge:badge,utilValue:0,pulsePhase:Math.random()*Math.PI*2};
+  machineObjects[m.id]={group:group,topMesh:top,badge:badge,sparkCanvas:sparkCanvas,utilValue:0,pulsePhase:Math.random()*Math.PI*2};
 });
 
 function setUtilization(utilMap){
@@ -530,6 +606,52 @@ function setUtilization(utilMap){
     obj.topMesh.material.emissiveIntensity=u>0.85?0.6:0.3;
     obj.badge.querySelector('.badge-util').innerHTML=utilLabel(u);
   });
+}
+
+function drawAllSparklines(){
+  Object.keys(machineObjects).forEach(function(id){
+    var obj=machineObjects[id];
+    if(!obj.sparkCanvas) return;
+    drawSparkline(obj.sparkCanvas, currentSchedule[id], currentDay);
+  });
+}
+
+function drawSparkline(canvas, utilArr, todayIdx){
+  var W=canvas.width, H=canvas.height;
+  var ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  // background
+  ctx.fillStyle='rgba(8,14,28,0.7)';
+  ctx.fillRect(0,0,W,H);
+  // 85% threshold line
+  ctx.strokeStyle='rgba(255,50,50,0.3)';
+  ctx.lineWidth=0.5;
+  ctx.beginPath(); ctx.moveTo(0,H*0.15); ctx.lineTo(W,H*0.15); ctx.stroke();
+  // fill area
+  var n=utilArr.length;
+  ctx.beginPath();
+  ctx.moveTo(0,H);
+  for(var i=0;i<n;i++){
+    var x=i/(n-1)*W, y=H-(utilArr[i]*H*0.92+H*0.04);
+    if(i===0) ctx.lineTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.lineTo(W,H); ctx.closePath();
+  var grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'rgba(0,200,255,0.5)');
+  grad.addColorStop(1,'rgba(0,200,255,0.05)');
+  ctx.fillStyle=grad; ctx.fill();
+  // line
+  ctx.beginPath();
+  for(var i=0;i<n;i++){
+    var x=i/(n-1)*W, y=H-(utilArr[i]*H*0.92+H*0.04);
+    var u=utilArr[i];
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle='rgba(0,200,255,0.9)'; ctx.lineWidth=1.2; ctx.stroke();
+  // today marker
+  var tx=todayIdx/(n-1)*W;
+  ctx.strokeStyle='rgba(255,200,0,0.8)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(tx,0); ctx.lineTo(tx,H); ctx.stroke();
 }
 
 window.addEventListener('resize',function(){
@@ -566,9 +688,12 @@ function refresh(){
   document.getElementById('bottleneck-status').innerHTML='Bottlenecks: <b style="color:'+c+'">'+bt+'</b>';
   var pct=currentDay/(TOTAL_DAYS-1)*100;
   slider.style.background='linear-gradient(to right,var(--cyan) '+pct+'%,#1a2a4a '+pct+'%)';
+  drawAllSparklines();
+  if(drawerMachineId) renderDrawerCharts(drawerMachineId);
 }
 
-function recompute(){currentSchedule=computeSchedule(mutations);updateChips();refresh();}
+function recompute(){currentSchedule=computeSchedule(mutations);updateChips();refresh();if(drawerMachineId) openDrawer(drawerMachineId);}
+var drawerMachineId=null;
 
 function removeMutation(type,machineId,jobId){
   for(var i=mutations.length-1;i>=0;i--){
@@ -665,6 +790,188 @@ document.getElementById('downtime-btn').addEventListener('click',function(){
   setTimeout(function(){btn.textContent='Add Downtime';btn.classList.remove('applied');},1500);
   recompute();
 });
+
+// ═══════════════════════════════════════════════════════════════
+// DETAIL DRAWER
+// ═══════════════════════════════════════════════════════════════
+var drawer=document.getElementById('detail-drawer');
+document.getElementById('drawer-close').addEventListener('click',function(){
+  drawer.classList.remove('open');
+  drawerMachineId=null;
+  // un-highlight all machines
+  Object.values(machineObjects).forEach(function(o){ o.group.scale.set(1,1,1); });
+});
+
+function openDrawer(machineId){
+  drawerMachineId=machineId;
+  var m=MACHINES.filter(function(m){return m.id===machineId;})[0];
+  document.getElementById('drawer-machine-name').textContent=m.name+' — '+m.dept;
+  drawer.classList.add('open');
+  // pulse-highlight selected machine
+  Object.keys(machineObjects).forEach(function(id){
+    machineObjects[id].group.scale.set(id===machineId?1.12:1, id===machineId?1.12:1, id===machineId?1.12:1);
+  });
+  renderDrawerCharts(machineId);
+}
+
+function renderDrawerCharts(machineId){
+  renderTimelineChart(machineId);
+  renderDownstream(machineId);
+  renderFixOptions(machineId);
+}
+
+function renderTimelineChart(machineId){
+  var canvas=document.getElementById('drawer-timeline-canvas');
+  var panel=document.getElementById('drawer-timeline-panel');
+  // size canvas to panel
+  var W=panel.clientWidth-32; var H=140;
+  canvas.width=W; canvas.height=H;
+  var ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  var arr=currentSchedule[machineId];
+  var n=arr.length;
+  // axes
+  ctx.strokeStyle='rgba(0,180,255,0.12)'; ctx.lineWidth=0.5;
+  [0.25,0.5,0.75,1.0].forEach(function(v){
+    var y=H-(v*(H-20)+10);
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    ctx.fillStyle='rgba(100,140,180,0.5)'; ctx.font='8px sans-serif';
+    ctx.fillText(Math.round(v*100)+'%',2,y-2);
+  });
+  // 85% critical line
+  var critY=H-((0.85*(H-20))+10);
+  ctx.strokeStyle='rgba(255,60,60,0.45)'; ctx.lineWidth=1;
+  ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(0,critY); ctx.lineTo(W,critY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,80,80,0.6)'; ctx.font='8px sans-serif'; ctx.fillText('85% critical',W-60,critY-3);
+  // today line
+  var tx=currentDay/(n-1)*W;
+  ctx.strokeStyle='rgba(255,200,0,0.6)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(tx,0); ctx.lineTo(tx,H); ctx.stroke();
+  // fill under curve, colored by heat
+  for(var i=0;i<n-1;i++){
+    var x0=i/(n-1)*W, x1=(i+1)/(n-1)*W;
+    var y0=H-((arr[i]*(H-20))+10), y1=H-((arr[i+1]*(H-20))+10);
+    var u=(arr[i]+arr[i+1])/2;
+    var col= u>0.85?'rgba(255,50,50,0.35)': u>0.6?'rgba(255,170,0,0.25)':'rgba(0,255,136,0.15)';
+    ctx.fillStyle=col;
+    ctx.beginPath(); ctx.moveTo(x0,H); ctx.lineTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x1,H); ctx.closePath(); ctx.fill();
+  }
+  // line
+  ctx.beginPath();
+  for(var i=0;i<n;i++){
+    var x=i/(n-1)*W, y=H-((arr[i]*(H-20))+10);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle='rgba(0,200,255,0.9)'; ctx.lineWidth=1.5; ctx.stroke();
+  // annotate spike regions
+  var inSpike=false, spikeStart=0;
+  for(var i=0;i<=n;i++){
+    var over=i<n&&arr[i]>0.85;
+    if(over&&!inSpike){inSpike=true;spikeStart=i;}
+    if(!over&&inSpike){
+      inSpike=false;
+      var sx=spikeStart/(n-1)*W, ex=i/(n-1)*W;
+      ctx.fillStyle='rgba(255,60,60,0.12)';
+      ctx.fillRect(sx,0,ex-sx,H);
+      // label
+      var peakVal=0,peakDay=spikeStart;
+      for(var j=spikeStart;j<i;j++){if(arr[j]>peakVal){peakVal=arr[j];peakDay=j;}}
+      var lx=peakDay/(n-1)*W;
+      ctx.fillStyle='#ff6666'; ctx.font='bold 8px sans-serif';
+      ctx.fillText(Math.round(peakVal*100)+'%',lx-8,critY-8);
+    }
+  }
+  // day labels along bottom
+  ctx.fillStyle='rgba(100,140,180,0.6)'; ctx.font='8px sans-serif';
+  [0,7,14,21,28,35,41].forEach(function(d){
+    var x=d/(n-1)*W;
+    ctx.fillText('d'+d,x+1,H-1);
+  });
+}
+
+function renderDownstream(machineId){
+  var list=document.getElementById('drawer-downstream-list');
+  var ds=DOWNSTREAM[machineId]||[];
+  if(!ds.length){list.innerHTML='<div style="color:var(--dim);font-size:11px">No downstream dependencies</div>';return;}
+  var arr=currentSchedule[machineId];
+  // Find worst spike days for this machine
+  var spikeDays=[];
+  for(var d=0;d<arr.length;d++){if(arr[d]>0.85) spikeDays.push(d);}
+  var html='';
+  ds.forEach(function(mid){
+    var dsArr=currentSchedule[mid];
+    var dsM=MACHINES.filter(function(m){return m.id===mid;})[0];
+    // check if downstream is impacted (high util in the 3 days after this machine's spikes)
+    var impacted=false, maxUtil=0;
+    spikeDays.forEach(function(d){
+      for(var lag=1;lag<=4;lag++){
+        if(d+lag<dsArr.length&&dsArr[d+lag]>0.7){impacted=true;if(dsArr[d+lag]>maxUtil)maxUtil=dsArr[d+lag];}
+      }
+    });
+    var deptColor={'Turning':'#00c8ff','Milling':'#9b5de5','Inspect':'#00f5d4','Finish':'#f7b731'}[dsM.dept]||'#888';
+    html+='<div class="downstream-row">'
+      +'<span class="ds-dot" style="background:'+deptColor+'"></span>'
+      +'<span class="ds-name">'+dsM.name+'</span>';
+    if(impacted) html+='<span class="ds-impact">⚠ '+Math.round(maxUtil*100)+'% peak — starved</span>';
+    else html+='<span class="ds-ok">✓ OK</span>';
+    html+='</div>';
+  });
+  list.innerHTML=html;
+}
+
+function renderFixOptions(machineId){
+  var list=document.getElementById('drawer-fix-list');
+  var arr=currentSchedule[machineId];
+  function daysOver(a){var n=0;for(var d=0;d<a.length;d++){if(a[d]>0.85)n++;}return n;}
+  var baseOver=daysOver(arr);
+  // Option 1: add evening shift
+  var shiftMut=[{type:'shift',machineId:machineId,startDay:0,endDay:TOTAL_DAYS-1,capacityMultiplier:0.62}];
+  var shiftSched=computeSchedule(mutations.concat(shiftMut));
+  var shiftOver=daysOver(shiftSched[machineId]);
+  // Option 2: move the first job assigned to this machine (if any)
+  var jobsHere=JOBS.filter(function(j){return j.fromMachine===machineId;});
+  var moveOver=baseOver, moveLabel='No movable jobs';
+  if(jobsHere.length){
+    // find best alternate machine (lowest avg util)
+    var bestMid=null, bestUtil=99;
+    MACHINES.forEach(function(m){
+      if(m.id===machineId) return;
+      var avg=0; currentSchedule[m.id].forEach(function(v){avg+=v;}); avg/=TOTAL_DAYS;
+      if(avg<bestUtil){bestUtil=avg;bestMid=m.id;}
+    });
+    var moveMut=[{type:'moveJob',jobId:jobsHere[0].id,toMachineId:bestMid}];
+    var moveSched=computeSchedule(mutations.concat(moveMut));
+    moveOver=daysOver(moveSched[machineId]);
+    var destName=MACHINES.filter(function(m){return m.id===bestMid;})[0].name;
+    moveLabel='Move "'+jobsHere[0].name+'" → '+destName;
+  }
+  // Option 3: combine both
+  var bothMut=shiftMut.concat(jobsHere.length?[{type:'moveJob',jobId:jobsHere[0].id,toMachineId:(function(){var b=null,bv=99;MACHINES.forEach(function(m){if(m.id===machineId)return;var a=0;currentSchedule[m.id].forEach(function(v){a+=v;});a/=TOTAL_DAYS;if(a<bv){bv=a;b=m.id;}});return b;})()}]:[]);
+  var bothSched=computeSchedule(mutations.concat(bothMut));
+  var bothOver=daysOver(bothSched[machineId]);
+
+  var maxOver=Math.max(baseOver,1);
+  function barWidth(v){return Math.round((v/maxOver)*100);}
+  function barColor(v){return v>baseOver*0.7?'var(--red)':v>baseOver*0.3?'var(--amber)':'var(--green)';}
+  function saved(v){var s=baseOver-v; return s>0?'−'+s+' days overloaded':s===0?'no change':'worse';}
+
+  var html='';
+  var rows=[
+    {label:'Do nothing (base)',       days:baseOver, barW:barWidth(baseOver), col:'var(--red)'},
+    {label:'Add evening shift',        days:shiftOver,barW:barWidth(shiftOver),col:barColor(shiftOver)},
+    {label:moveLabel,                  days:moveOver, barW:barWidth(moveOver), col:barColor(moveOver)},
+    {label:'Shift + move job',         days:bothOver, barW:barWidth(bothOver), col:barColor(bothOver)},
+  ];
+  rows.forEach(function(r){
+    html+='<div class="fix-row">'
+      +'<span class="fix-label">'+r.label+'</span>'
+      +'<div class="fix-bar-wrap"><div class="fix-bar" style="width:'+r.barW+'%;background:'+r.col+'"></div></div>'
+      +'<span class="fix-days">'+r.days+' days</span>'
+      +'</div>';
+  });
+  list.innerHTML=html;
+}
 
 // ─── Reset ───────────────────────────────────────────────────────────────────
 document.getElementById('reset-btn').addEventListener('click',function(){
