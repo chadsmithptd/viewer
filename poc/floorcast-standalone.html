@@ -8,9 +8,29 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#0a0e1a;--panel-bg:rgba(10,18,35,0.92);--border:rgba(0,180,255,0.25);
-  --cyan:#00c8ff;--green:#00ff88;--amber:#ffaa00;--red:#ff3333;
+  --cyan:#00c8ff;--green:#00cc66;--amber:#ffaa00;--red:#ff3333;
   --text:#c8d8f0;--dim:#4a6080;--radius:6px;
 }
+body.light{
+  --bg:#eef2f7;--panel-bg:rgba(240,244,252,0.97);--border:rgba(0,120,200,0.25);
+  --cyan:#0077cc;--green:#008844;--amber:#c47800;--red:#cc2222;
+  --text:#1a2a3a;--dim:#7090b0;
+}
+body.light #app{background:var(--bg)}
+body.light #header{background:rgba(220,230,245,0.98)}
+body.light #canvas-wrap canvas{filter:none}
+body.light .machine-badge .badge-name{background:rgba(240,245,255,0.92);border-color:rgba(0,120,200,0.3);color:#1a2a3a}
+body.light select,body.light input[type="date"]{background:#dce6f2;color:#1a2a3a}
+body.light .fix-option{background:rgba(0,0,0,0.03);border-color:rgba(0,100,180,0.18)}
+body.light .fix-option.active{background:rgba(0,140,80,0.08);border-color:rgba(0,140,80,0.45)}
+body.light #detail-drawer{background:rgba(230,238,250,0.98)}
+body.light #job-panel{background:rgba(230,238,250,0.97)}
+#theme-toggle{
+  background:none;border:1px solid var(--border);color:var(--dim);
+  font-size:13px;padding:3px 10px;border-radius:4px;cursor:pointer;
+  transition:color .2s,border-color .2s;
+}
+#theme-toggle:hover{color:var(--text);border-color:var(--cyan)}
 html,body{height:100%;overflow:hidden;background:var(--bg);font-family:'Inter','Segoe UI',system-ui,sans-serif;color:var(--text)}
 #app{
   display:grid;
@@ -215,6 +235,7 @@ select:focus,input:focus{border-color:var(--cyan)}
       <span>Machines: <b>8</b></span>
       <span>Jobs Active: <b>12</b></span>
       <span id="bottleneck-status">Bottlenecks: <b style="color:#ff3333">3</b></span>
+      <button id="theme-toggle" title="Toggle light/dark mode">☀ Light</button>
       <button id="flows-toggle" title="Show/hide flow pipes" style="background:rgba(0,200,255,.12);border:1px solid var(--cyan);color:var(--cyan);font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;letter-spacing:.06em;">⇝ Flows ON</button>
     </div>
   </header>
@@ -1601,6 +1622,18 @@ document.getElementById('reset-btn').addEventListener('click',function(){
   document.querySelectorAll('.shift-toggle').forEach(function(el){el.checked=false;document.getElementById('sh-'+el.dataset.id).textContent='';});
   jobSel.value=''; tgtSel.innerHTML='<option value="">— pick target —</option>'; dtSel.value='';
   recompute();
+});
+
+document.getElementById('theme-toggle').addEventListener('click',function(){
+  var light=document.body.classList.toggle('light');
+  this.textContent=light?'☾ Dark':'☀ Light';
+  // redraw 2d canvases with new palette
+  drawTimeline();
+  drawAllSparklines();
+  if(drawerMachineId) renderDrawerCharts(drawerMachineId);
+  // update Three.js scene background
+  scene.background.set(light?0xeef2f7:0x0a0e1a);
+  scene.fog.color.set(light?0xeef2f7:0x0a0e1a);
 });
 
 document.getElementById('flows-toggle').addEventListener('click',function(){
