@@ -53,24 +53,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:'Inter','
 .job-load-panel .jlp-stats{font-size:10px;color:var(--dim);margin-top:5px;line-height:1.5;}
 .job-load-panel .jlp-stats b{color:var(--text);}
 #scrubber{
-  grid-area:scrub;display:flex;align-items:center;gap:12px;padding:0 20px;
+  grid-area:scrub;display:flex;align-items:center;gap:10px;padding:0 14px;
   background:var(--panel-bg);border-top:1px solid var(--border);
 }
-#play-btn{
-  background:none;border:1px solid var(--cyan);color:var(--cyan);
-  width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:14px;flex-shrink:0;
-}
-#play-btn:hover{background:rgba(0,200,255,.1)}
-#day-label{font-size:12px;color:var(--cyan);white-space:nowrap;min-width:150px}
-#time-slider{
-  flex:1;-webkit-appearance:none;height:4px;border-radius:2px;
-  background:linear-gradient(to right,var(--cyan) 0%,#1a2a4a 0%);outline:none;cursor:pointer;
-}
-#time-slider::-webkit-slider-thumb{
-  -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
-  background:var(--cyan);box-shadow:0 0 8px var(--cyan);cursor:pointer;
-}
-.scrub-label{font-size:11px;color:var(--dim)}
+#day-label{font-size:11px;color:var(--cyan);white-space:nowrap;min-width:130px;flex-shrink:0}
+#timeline-canvas{flex:1;height:52px;cursor:pointer;display:block;}
+.scrub-label{font-size:11px;color:var(--dim);flex-shrink:0}
 #sidebar{
   grid-area:sidebar;display:flex;flex-direction:column;background:var(--panel-bg);
   border-left:1px solid var(--border);overflow-y:auto;padding:16px 14px;gap:18px;
@@ -236,11 +224,8 @@ select:focus,input:focus{border-color:var(--cyan)}
   </div>
   <div id="canvas-wrap"><canvas id="main-canvas"></canvas></div>
   <div id="scrubber">
-    <button id="play-btn">▶</button>
-    <span class="scrub-label">Now</span>
-    <input type="range" id="time-slider">
-    <span class="scrub-label">+6 Weeks</span>
-    <span id="day-label"></span>
+    <span id="day-label">Today</span>
+    <canvas id="timeline-canvas"></canvas>
   </div>
   <aside id="sidebar">
     <div class="sidebar-section">
@@ -751,6 +736,7 @@ function drawSparkline(canvas, utilArr, todayIdx){
 window.addEventListener('resize',function(){
   camera.aspect=W()/H(); camera.updateProjectionMatrix();
   renderer.setSize(W(),H()); labelRenderer.setSize(W(),H());
+  drawTimeline();
 });
 
 // ─── Flow arrows (Sankey-like pipes between machines) ────────────────────────
@@ -998,8 +984,7 @@ function refresh(){
   Object.values(currentSchedule).forEach(function(arr){if(arr[currentDay]>0.85) bt++;});
   var c=bt>2?'#ff3333':bt>0?'#ffaa00':'#00ff88';
   document.getElementById('bottleneck-status').innerHTML='Bottlenecks: <b style="color:'+c+'">'+bt+'</b>';
-  var pct=currentDay/(TOTAL_DAYS-1)*100;
-  slider.style.background='linear-gradient(to right,var(--cyan) '+pct+'%,#1a2a4a '+pct+'%)';
+  drawTimeline();
   drawAllSparklines();
   if(drawerMachineId) renderDrawerCharts(drawerMachineId);
 }
@@ -1028,24 +1013,79 @@ function updateChips(){
 }
 
 // ─── Scrubber ────────────────────────────────────────────────────────────────
-var slider=document.getElementById('time-slider');
 var dayLabel=document.getElementById('day-label');
-var playBtn=document.getElementById('play-btn');
-slider.min=0; slider.max=TOTAL_DAYS-1; slider.value=0;
+var tlCanvas=document.getElementById('timeline-canvas');
 
 function dayToDate(d){var dt=new Date();dt.setDate(dt.getDate()+d);return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
-function updateDayLabel(d){dayLabel.textContent=d===0?'Today ('+dayToDate(0)+')':'Day '+d+' — '+dayToDate(d);}
+function updateDayLabel(d){
+  dayLabel.textContent=(d===0?'Today':'Day '+d)+' — '+dayToDate(d);
+}
 
-slider.addEventListener('input',function(){
-  currentDay=parseInt(slider.value); updateDayLabel(currentDay); refresh();
+function drawTimeline(){
+  var W=tlCanvas.offsetWidth, H=tlCanvas.offsetHeight;
+  if(!W||!H) return;
+  tlCanvas.width=W; tlCanvas.height=H;
+  var ctx=tlCanvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  var colW=W/TOTAL_DAYS;
+  var barH=H-18; // leave bottom 18px for date labels
+
+  for(var d=0;d<TOTAL_DAYS;d++){
+    // max utilization across all machines for this day
+    var maxU=0;
+    Object.values(currentSchedule).forEach(function(arr){ if(arr[d]>maxU) maxU=arr[d]; });
+    var col=heatColor(maxU);
+    var r=Math.round(col.r*255), g=Math.round(col.g*255), b=Math.round(col.b*255);
+    var x=d*colW;
+
+    // bar fill — height proportional to maxU
+    var fillH=Math.max(3, maxU*barH);
+    ctx.fillStyle='rgba('+r+','+g+','+b+',0.22)';
+    ctx.fillRect(x+0.5, 0, colW-1, barH);
+    ctx.fillStyle='rgba('+r+','+g+','+b+',0.85)';
+    ctx.fillRect(x+0.5, barH-fillH, colW-1, fillH);
+
+    // week tick & label every 7 days
+    if(d%7===0){
+      ctx.strokeStyle='rgba(0,180,255,0.3)';
+      ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,barH); ctx.stroke();
+      ctx.fillStyle='rgba(100,160,200,0.7)';
+      ctx.font='9px sans-serif';
+      ctx.fillText(d===0?'Now':dayToDate(d), x+2, H-3);
+    }
+  }
+
+  // selected day cursor
+  var sx=currentDay*colW;
+  ctx.strokeStyle='rgba(255,255,255,0.9)';
+  ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(sx+colW/2,0); ctx.lineTo(sx+colW/2,barH); ctx.stroke();
+  // highlight selected column
+  ctx.fillStyle='rgba(255,255,255,0.12)';
+  ctx.fillRect(sx+0.5, 0, colW-1, barH);
+
+  // hover tooltip day — handled via mousemove
+}
+
+function tlDayFromX(x){
+  var W=tlCanvas.offsetWidth;
+  return Math.max(0,Math.min(TOTAL_DAYS-1, Math.floor(x/W*TOTAL_DAYS)));
+}
+
+tlCanvas.addEventListener('click',function(e){
+  var rect=tlCanvas.getBoundingClientRect();
+  currentDay=tlDayFromX(e.clientX-rect.left);
+  updateDayLabel(currentDay); refresh();
 });
 
-var playing=false,playInterval=null;
-playBtn.addEventListener('click',function(){
-  playing=!playing; playBtn.textContent=playing?'⏸':'▶';
-  if(playing) playInterval=setInterval(function(){currentDay=(currentDay+1)%TOTAL_DAYS;slider.value=currentDay;updateDayLabel(currentDay);refresh();},120);
-  else clearInterval(playInterval);
+// hover: show date tooltip
+tlCanvas.addEventListener('mousemove',function(e){
+  var rect=tlCanvas.getBoundingClientRect();
+  var hd=tlDayFromX(e.clientX-rect.left);
+  tlCanvas.title='Day '+hd+' — '+dayToDate(hd);
 });
+
 updateDayLabel(0);
 
 // ─── Shift Levers ────────────────────────────────────────────────────────────
