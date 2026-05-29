@@ -167,6 +167,58 @@ select:focus,input:focus{border-color:var(--cyan)}
 }
 #drawer-close:hover{color:var(--text)}
 #drawer-body{flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;overflow:hidden}
+/* ── Config modal ─────────────────────────────────────────────── */
+#cfg-modal{
+  display:none;position:fixed;inset:0;z-index:100;
+  background:rgba(0,0,0,0.65);align-items:center;justify-content:center;
+}
+#cfg-modal.open{display:flex}
+#cfg-box{
+  background:var(--panel-bg);border:1px solid var(--border);border-radius:8px;
+  width:520px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;
+}
+#cfg-box h2{
+  font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--cyan);padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+#cfg-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.cfg-tab{
+  flex:1;padding:8px;font-size:11px;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;background:none;border:none;color:var(--dim);cursor:pointer;
+}
+.cfg-tab.active{color:var(--cyan);border-bottom:2px solid var(--cyan)}
+#cfg-body{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.cfg-row{display:flex;align-items:center;gap:10px;font-size:12px}
+.cfg-row label{flex:1;color:var(--text)}
+.cfg-row input[type=text],.cfg-row select,.cfg-row input[type=number]{
+  width:140px;background:#0d1526;border:1px solid var(--border);color:var(--text);
+  padding:5px 8px;border-radius:var(--radius);font-size:12px;outline:none;font-family:inherit;
+}
+body.light .cfg-row input[type=text],body.light .cfg-row select,body.light .cfg-row input[type=number]{background:#dce6f2;color:#1a2a3a}
+.cfg-row input:focus,.cfg-row select:focus{border-color:var(--cyan)}
+.cfg-machine-row{
+  display:flex;align-items:center;gap:8px;font-size:11px;padding:6px 8px;
+  background:rgba(0,180,255,.05);border:1px solid rgba(0,180,255,.12);border-radius:4px;
+}
+.cfg-machine-row .cm-name{flex:1;font-weight:600;color:var(--text)}
+.cfg-machine-row .cm-dept{font-size:10px;color:var(--dim)}
+.btn-del{
+  background:none;border:1px solid var(--red);color:var(--red);
+  font-size:10px;padding:2px 7px;border-radius:3px;cursor:pointer;flex-shrink:0;
+}
+.btn-del:hover{background:rgba(255,50,50,.12)}
+#cfg-footer{
+  display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;
+  border-top:1px solid var(--border);flex-shrink:0;
+}
+#cfg-btn{
+  font-size:11px;padding:4px 12px;border-radius:4px;cursor:pointer;flex-shrink:0;
+  background:rgba(0,200,255,.12);border:1px solid var(--cyan);color:var(--cyan);
+  letter-spacing:.06em;
+}
+/* ── 4th panel: Work Center Transfer ─────────────────────────── */
+#drawer-body{flex:1;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;overflow:hidden}
+
 .drawer-panel{padding:10px 16px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:6px;overflow:hidden}
 .drawer-panel:last-child{border-right:none}
 .drawer-panel-title{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);margin-bottom:2px}
@@ -236,6 +288,7 @@ select:focus,input:focus{border-color:var(--cyan)}
       <span>Jobs Active: <b>12</b></span>
       <span id="bottleneck-status">Bottlenecks: <b style="color:#ff3333">3</b></span>
       <button id="theme-toggle" title="Toggle light/dark mode">☀ Light</button>
+      <button id="cfg-btn" title="Configure floor">⚙ Config</button>
       <button id="flows-toggle" title="Show/hide flow pipes" style="background:rgba(0,200,255,.12);border:1px solid var(--cyan);color:var(--cyan);font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;letter-spacing:.06em;">⇝ Flows ON</button>
     </div>
   </header>
@@ -306,6 +359,27 @@ select:focus,input:focus{border-color:var(--cyan)}
     <div class="drawer-panel" id="drawer-fix-panel">
       <div class="drawer-panel-title">⚡ Fix Options — drag to tune, watch the floor react</div>
       <div id="drawer-fix-list" style="display:flex;flex-direction:column;gap:6px;overflow-y:auto"></div>
+    </div>
+    <div class="drawer-panel" id="drawer-transfer-panel">
+      <div class="drawer-panel-title">⇄ Transfer Work Center</div>
+      <div id="drawer-transfer-body" style="display:flex;flex-direction:column;gap:8px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Config modal -->
+<div id="cfg-modal">
+  <div id="cfg-box">
+    <h2>⚙ Floor Configuration</h2>
+    <div id="cfg-tabs">
+      <button class="cfg-tab active" data-tab="machines">Machines</button>
+      <button class="cfg-tab" data-tab="floor">Floor Size</button>
+      <button class="cfg-tab" data-tab="jobs">Job Assignments</button>
+    </div>
+    <div id="cfg-body"></div>
+    <div id="cfg-footer">
+      <button class="btn" id="cfg-cancel" style="width:auto;padding:6px 18px">Cancel</button>
+      <button class="btn" id="cfg-apply" style="width:auto;padding:6px 18px;border-color:var(--green);color:var(--green)">Apply</button>
     </div>
   </div>
 </div>
@@ -655,14 +729,35 @@ scene.add(key);
 var fill=new THREE.DirectionalLight(0x4466aa,0.6); fill.position.set(-8,6,-6); scene.add(fill);
 
 // Floor
-var floor=new THREE.Mesh(new THREE.PlaneGeometry(32,22),new THREE.MeshStandardMaterial({color:0x0d1526,roughness:.9,metalness:.1}));
-floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
+var FLOOR_W=32, FLOOR_D=22;
+var floorMesh=new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_W,FLOOR_D),new THREE.MeshStandardMaterial({color:0x0d1526,roughness:.9,metalness:.1}));
+floorMesh.rotation.x=-Math.PI/2; floorMesh.receiveShadow=true; scene.add(floorMesh);
+var floor=floorMesh;
+
+// Walls
+var wallObjs=[];
+function buildWalls(){
+  wallObjs.forEach(function(o){scene.remove(o);}); wallObjs=[];
+  var hw=FLOOR_W/2, hd=FLOOR_D/2, wh=3.2;
+  var wallMat=new THREE.MeshStandardMaterial({color:0x0e1a2e,roughness:.85,metalness:.15,transparent:true,opacity:.6,side:THREE.DoubleSide});
+  // S,N,W,E
+  [{px:0,pz:hd,w:FLOOR_W,d:0.18,r:0},{px:0,pz:-hd,w:FLOOR_W,d:0.18,r:0},
+   {px:-hw,pz:0,w:0.18,d:FLOOR_D,r:0},{px:hw,pz:0,w:0.18,d:FLOOR_D,r:0}].forEach(function(wall){
+    var mesh=new THREE.Mesh(new THREE.BoxGeometry(wall.w,wh,wall.d),wallMat.clone());
+    mesh.position.set(wall.px,wh/2,wall.pz); mesh.castShadow=true; scene.add(mesh); wallObjs.push(mesh);
+    // cyan glow strip at top
+    var strip=new THREE.Mesh(new THREE.BoxGeometry(wall.w,0.05,wall.d),new THREE.MeshBasicMaterial({color:0x00c8ff,transparent:true,opacity:0.5}));
+    strip.position.set(wall.px,wh,wall.pz); scene.add(strip); wallObjs.push(strip);
+  });
+}
+buildWalls();
 
 // Grid
 var gpts=[];
 for(var gi=-15;gi<=15;gi++){gpts.push(gi,0.01,-11,gi,0.01,11);gpts.push(-15,0.01,gi,15,0.01,gi);}
 var gg=new THREE.BufferGeometry(); gg.setAttribute('position',new THREE.Float32BufferAttribute(gpts,3));
-scene.add(new THREE.LineSegments(gg,new THREE.LineBasicMaterial({color:0x1a2a4a,transparent:true,opacity:.45})));
+var gridLines=new THREE.LineSegments(gg,new THREE.LineBasicMaterial({color:0x1a2a4a,transparent:true,opacity:.45}));
+scene.add(gridLines);
 
 // Dept areas
 DEPT_AREAS.forEach(function(a){
@@ -926,7 +1021,8 @@ renderer.domElement.addEventListener('pointerdown',function(e){
   if(!hitMachineId) return;
 
   e.stopPropagation();
-  dragState={machineId:hitMachineId, active:true};
+  dragState={machineId:hitMachineId, active:true, pointerId:e.pointerId};
+  renderer.domElement.setPointerCapture(e.pointerId);
   controls.enabled=false;
   renderer.domElement.style.cursor='grabbing';
 });
@@ -956,6 +1052,15 @@ renderer.domElement.addEventListener('pointermove',function(e){
 
 renderer.domElement.addEventListener('pointerup',function(e){
   if(!dragState) return;
+  if(dragState.pointerId!=null) renderer.domElement.releasePointerCapture(dragState.pointerId);
+  dragState=null;
+  controls.enabled=true;
+  renderer.domElement.style.cursor='';
+});
+// safety net: also cancel on pointercancel
+renderer.domElement.addEventListener('pointercancel',function(e){
+  if(!dragState) return;
+  if(dragState.pointerId!=null) renderer.domElement.releasePointerCapture(dragState.pointerId);
   dragState=null;
   controls.enabled=true;
   renderer.domElement.style.cursor='';
@@ -1232,6 +1337,7 @@ function renderDrawerCharts(machineId){
   renderTimelineChart(machineId);
   renderDownstream(machineId);
   renderFixOptions(machineId);
+  renderTransferPanel(machineId);
 }
 
 function renderTimelineChart(machineId){
@@ -1729,8 +1835,10 @@ function renderJobLoadPanel(container, job){
   drawJobLoadChart(lp.querySelector('canvas'), job.fromMachine, job.dueDay);
 }
 
-(function initJobPanel(){
+function refreshJobPanel(){
   var container=document.getElementById('job-cards');
+  container.innerHTML='';
+  selectedJobId=null; applyJobHighlight(null);
   JOBS.forEach(function(job){
     var fromName=getMachineName(job.fromMachine);
     var wrap=document.createElement('div');
@@ -1742,7 +1850,6 @@ function renderJobLoadPanel(container, job){
     var card=wrap.querySelector('.job-card');
     card.addEventListener('click',function(){
       if(selectedJobId===job.id){
-        // deselect
         selectedJobId=null;
         document.querySelectorAll('.job-card').forEach(function(c){c.classList.remove('selected');});
         document.querySelectorAll('.job-load-panel').forEach(function(p){p.classList.remove('visible');});
@@ -1758,7 +1865,191 @@ function renderJobLoadPanel(container, job){
     });
     container.appendChild(wrap);
   });
-})();
+}
+refreshJobPanel();
+
+// ─── Config modal ─────────────────────────────────────────────────────────────
+var cfgModal=document.getElementById('cfg-modal');
+var cfgBody=document.getElementById('cfg-body');
+var cfgActiveTab='machines';
+
+document.getElementById('cfg-btn').addEventListener('click',function(){
+  cfgModal.classList.add('open'); renderCfgTab(cfgActiveTab);
+});
+document.getElementById('cfg-cancel').addEventListener('click',function(){cfgModal.classList.remove('open');});
+cfgModal.addEventListener('click',function(e){if(e.target===cfgModal)cfgModal.classList.remove('open');});
+document.querySelectorAll('.cfg-tab').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    cfgActiveTab=this.dataset.tab;
+    document.querySelectorAll('.cfg-tab').forEach(function(b){b.classList.remove('active');});
+    this.classList.add('active'); renderCfgTab(cfgActiveTab);
+  });
+});
+document.getElementById('cfg-apply').addEventListener('click',function(){applyCfgChanges();cfgModal.classList.remove('open');});
+
+function renderCfgTab(tab){
+  cfgBody.innerHTML='';
+  if(tab==='machines') renderCfgMachines();
+  else if(tab==='floor') renderCfgFloor();
+  else renderCfgJobs();
+}
+
+function renderCfgMachines(){
+  var addDiv=document.createElement('div');
+  addDiv.style.cssText='display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,200,255,.05);border:1px solid var(--border);border-radius:5px;margin-bottom:4px';
+  addDiv.innerHTML='<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan)">Add New Machine</div>'
+    +'<div class="cfg-row"><label>Name</label><input type="text" id="cfg-new-name" placeholder="e.g. VMC #4"></div>'
+    +'<div class="cfg-row"><label>Work Center</label><select id="cfg-new-dept">'
+    +Object.keys(DEPT_COLORS).map(function(d){return'<option>'+d+'</option>';}).join('')+'</select></div>'
+    +'<button class="btn" id="cfg-add-btn" style="width:auto;align-self:flex-start;padding:5px 14px">+ Add</button>';
+  cfgBody.appendChild(addDiv);
+  var listDiv=document.createElement('div'); listDiv.style.cssText='display:flex;flex-direction:column;gap:5px';
+  MACHINES.forEach(function(m){
+    var row=document.createElement('div'); row.className='cfg-machine-row';
+    row.innerHTML='<span class="cm-name">'+m.name+'</span><span class="cm-dept">'+m.dept+'</span>'
+      +'<button class="btn-del" data-id="'+m.id+'">✕</button>';
+    listDiv.appendChild(row);
+  });
+  cfgBody.appendChild(listDiv);
+  document.getElementById('cfg-add-btn').addEventListener('click',function(){
+    var name=document.getElementById('cfg-new-name').value.trim();
+    var dept=document.getElementById('cfg-new-dept').value;
+    if(!name) return;
+    var maxN=MACHINES.reduce(function(mx,m){return Math.max(mx,parseInt(m.id.slice(1))||0);},0);
+    var newId='M'+(maxN+1);
+    MACHINES.push({id:newId,name:name,dept:dept,x:0,z:0});
+    DOWNSTREAM[newId]=[];
+    renderCfgTab('machines');
+  });
+  listDiv.addEventListener('click',function(e){
+    var btn=e.target.closest('.btn-del'); if(!btn) return;
+    var id=btn.dataset.id;
+    MACHINES.splice(MACHINES.findIndex(function(m){return m.id===id;}),1);
+    delete DOWNSTREAM[id];
+    Object.keys(DOWNSTREAM).forEach(function(k){DOWNSTREAM[k]=DOWNSTREAM[k].filter(function(x){return x!==id;});});
+    JOBS.forEach(function(j){if(j.fromMachine===id&&MACHINES.length)j.fromMachine=MACHINES[0].id;});
+    renderCfgTab('machines');
+  });
+}
+
+function renderCfgFloor(){
+  var wRow=document.createElement('div'); wRow.className='cfg-row';
+  wRow.innerHTML='<label>Floor Width (units)</label><input type="number" id="cfg-fw" min="10" max="80" value="'+FLOOR_W+'" style="width:80px">';
+  var dRow=document.createElement('div'); dRow.className='cfg-row';
+  dRow.innerHTML='<label>Floor Depth (units)</label><input type="number" id="cfg-fd" min="10" max="60" value="'+FLOOR_D+'" style="width:80px">';
+  cfgBody.appendChild(wRow); cfgBody.appendChild(dRow);
+}
+
+function renderCfgJobs(){
+  JOBS.forEach(function(job){
+    var row=document.createElement('div'); row.className='cfg-row';
+    var sel='<select class="cfg-job-wc" data-job="'+job.id+'" style="flex:none">'
+      +MACHINES.map(function(m){return'<option value="'+m.id+'"'+(m.id===job.fromMachine?' selected':'')+'>'+m.name+'</option>';}).join('')+'</select>';
+    row.innerHTML='<label style="flex:1.5">'+job.name+'</label>'+sel;
+    cfgBody.appendChild(row);
+  });
+  cfgBody.addEventListener('change',function(e){
+    var sel=e.target.closest('.cfg-job-wc'); if(!sel) return;
+    var j=JOBS.filter(function(x){return x.id===sel.dataset.job;})[0];
+    if(j) j.fromMachine=sel.value;
+  });
+}
+
+function applyCfgChanges(){
+  var fwEl=document.getElementById('cfg-fw'),fdEl=document.getElementById('cfg-fd');
+  if(fwEl&&fdEl){
+    var nw=Math.max(10,parseInt(fwEl.value)||FLOOR_W), nd=Math.max(10,parseInt(fdEl.value)||FLOOR_D);
+    if(nw!==FLOOR_W||nd!==FLOOR_D){
+      FLOOR_W=nw; FLOOR_D=nd;
+      floorMesh.geometry.dispose(); floorMesh.geometry=new THREE.PlaneGeometry(FLOOR_W,FLOOR_D);
+      scene.remove(gridLines);
+      var gpts2=[],hw2=Math.ceil(FLOOR_W/2),hd2=Math.ceil(FLOOR_D/2);
+      for(var gi=-hw2;gi<=hw2;gi++){gpts2.push(gi,.01,-hd2,gi,.01,hd2);gpts2.push(-hw2,.01,gi,hw2,.01,gi);}
+      var gg2=new THREE.BufferGeometry(); gg2.setAttribute('position',new THREE.Float32BufferAttribute(gpts2,3));
+      gridLines=new THREE.LineSegments(gg2,new THREE.LineBasicMaterial({color:0x1a2a4a,transparent:true,opacity:.45}));
+      scene.add(gridLines);
+      buildWalls();
+    }
+  }
+  rebuildMachineObjects(); recompute(); refreshJobPanel(); refreshSidebarMachineSelects();
+}
+
+function rebuildMachineObjects(){
+  Object.keys(machineObjects).forEach(function(id){
+    if(!MACHINES.find(function(m){return m.id===id;})){
+      scene.remove(machineObjects[id].group); delete machineObjects[id];
+    }
+  });
+  MACHINES.forEach(function(m){
+    if(machineObjects[m.id]) return;
+    var color=DEPT_COLORS[m.dept]||0x888888;
+    var body=new THREE.Mesh(new THREE.BoxGeometry(1.2,.7,1.2),new THREE.MeshStandardMaterial({color:0x162030,roughness:.7,metalness:.4}));
+    body.castShadow=true; body.receiveShadow=true;
+    var topMat=new THREE.MeshStandardMaterial({color:0x00ff88,emissive:new THREE.Color(0x00ff88),emissiveIntensity:.4,roughness:.4,metalness:.6});
+    var top=new THREE.Mesh(new THREE.BoxGeometry(1.1,.05,1.1),topMat); top.position.y=.375;
+    var strip=new THREE.Mesh(new THREE.BoxGeometry(1.22,.06,.12),new THREE.MeshStandardMaterial({color:color,emissive:new THREE.Color(color),emissiveIntensity:.6}));
+    strip.position.set(0,-.15,.55);
+    var group=new THREE.Group(); group.add(body,top,strip); group.position.set(m.x,.35,m.z); scene.add(group);
+    var badge=document.createElement('div'); badge.className='machine-badge';
+    var sparkCanvas=document.createElement('canvas'); sparkCanvas.className='badge-spark'; sparkCanvas.width=64; sparkCanvas.height=20;
+    sparkCanvas.title='Click for detail'; sparkCanvas.style.pointerEvents='auto';
+    badge.innerHTML='<span class="badge-name">'+m.name+'</span><span class="badge-util">—</span>';
+    badge.appendChild(sparkCanvas);
+    (function(mid){sparkCanvas.addEventListener('click',function(e){e.stopPropagation();openDrawer(mid);});})(m.id);
+    var label=new THREE.CSS2DObject(badge); label.position.set(0,1.1,0); group.add(label);
+    machineObjects[m.id]={group:group,topMesh:top,badge:badge,sparkCanvas:sparkCanvas,utilValue:0,pulsePhase:Math.random()*Math.PI*2};
+  });
+  buildFlowArrows();
+}
+
+function refreshSidebarMachineSelects(){
+  var shiftCont=document.getElementById('shift-levers'); shiftCont.innerHTML='';
+  MACHINES.forEach(function(m){
+    var row=document.createElement('div'); row.className='lever-row';
+    row.innerHTML='<label class="lever-label">'+m.name+'</label><label class="toggle-wrap"><input type="checkbox" class="shift-toggle" data-id="'+m.id+'"><span class="toggle-track"><span class="toggle-thumb"></span></span></label><span class="lever-hint" id="sh-'+m.id+'"></span>';
+    shiftCont.appendChild(row);
+  });
+  var jobSel=document.getElementById('job-select');
+  jobSel.innerHTML='<option value="">— pick a job —</option>';
+  JOBS.forEach(function(j){jobSel.innerHTML+='<option value="'+j.id+'">'+j.name+' ('+j.fromMachine+')</option>';});
+  var dtSel=document.getElementById('downtime-machine-select');
+  dtSel.innerHTML='<option value="">— pick machine —</option>';
+  MACHINES.forEach(function(m){dtSel.innerHTML+='<option value="'+m.id+'">'+m.name+'</option>';});
+}
+
+// ─── Work Center Transfer (4th drawer panel) ─────────────────────────────────
+function renderTransferPanel(machineId){
+  var body=document.getElementById('drawer-transfer-body'); if(!body) return;
+  body.innerHTML='';
+  var jobsHere=JOBS.filter(function(j){return j.fromMachine===machineId;});
+  if(!jobsHere.length){
+    body.innerHTML='<div style="color:var(--dim);font-size:11px;padding:4px 0">No jobs assigned here.</div>'; return;
+  }
+  jobsHere.forEach(function(job){
+    var card=document.createElement('div');
+    card.style.cssText='display:flex;flex-direction:column;gap:5px;padding:8px 10px;background:rgba(0,200,255,.05);border:1px solid rgba(0,180,255,.15);border-radius:4px;font-size:11px';
+    var opts=MACHINES.filter(function(m){return m.id!==machineId;}).map(function(m){return'<option value="'+m.id+'">'+m.name+'</option>';}).join('');
+    card.innerHTML='<div style="font-weight:600;color:var(--text)">'+job.name+'</div>'
+      +'<div style="color:var(--dim)">Due day '+job.dueDay+' · qty '+job.qty+'</div>'
+      +'<div style="display:flex;gap:6px;align-items:center">'
+      +'<select style="flex:1;font-size:11px" class="xfer-sel" data-job="'+job.id+'"><option value="">Transfer to…</option>'+opts+'</select>'
+      +'<button class="btn xfer-btn" style="width:auto;padding:3px 10px;font-size:11px" data-job="'+job.id+'">Move</button>'
+      +'</div>';
+    body.appendChild(card);
+  });
+  body.addEventListener('click',function(e){
+    var btn=e.target.closest('.xfer-btn'); if(!btn) return;
+    var jobId=btn.dataset.job;
+    var sel=body.querySelector('.xfer-sel[data-job="'+jobId+'"]');
+    if(!sel||!sel.value) return;
+    var j=JOBS.filter(function(x){return x.id===jobId;})[0]; if(!j) return;
+    j.fromMachine=sel.value;
+    removeMutation('moveJob',null,jobId);
+    mutations.push({type:'moveJob',jobId:jobId,toMachineId:sel.value,loadFraction:1});
+    recompute(); updateChips(); refreshJobPanel();
+    renderTransferPanel(machineId);
+  });
+}
 
 refresh();
 </script>
