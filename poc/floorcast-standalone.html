@@ -1028,24 +1028,34 @@ function drawTimeline(){
   var ctx=tlCanvas.getContext('2d');
   ctx.clearRect(0,0,W,H);
   var colW=W/TOTAL_DAYS;
-  var barH=H-18; // leave bottom 18px for date labels
+  var barH=H-18;
+  var machineCount=MACHINES.length;
 
+  // pre-compute avg and max per day
+  var avgArr=[], maxArr=[];
   for(var d=0;d<TOTAL_DAYS;d++){
-    // max utilization across all machines for this day
-    var maxU=0;
-    Object.values(currentSchedule).forEach(function(arr){ if(arr[d]>maxU) maxU=arr[d]; });
-    var col=heatColor(maxU);
+    var sum=0, mx=0;
+    Object.values(currentSchedule).forEach(function(arr){
+      sum+=arr[d]; if(arr[d]>mx) mx=arr[d];
+    });
+    avgArr[d]=sum/machineCount;
+    maxArr[d]=mx;
+  }
+
+  // draw bars (avg drives height + color)
+  for(var d=0;d<TOTAL_DAYS;d++){
+    var avg=avgArr[d];
+    var col=heatColor(avg);
     var r=Math.round(col.r*255), g=Math.round(col.g*255), b=Math.round(col.b*255);
     var x=d*colW;
 
-    // bar fill — height proportional to maxU
-    var fillH=Math.max(3, maxU*barH);
-    ctx.fillStyle='rgba('+r+','+g+','+b+',0.22)';
+    var fillH=Math.max(2, avg*barH);
+    ctx.fillStyle='rgba('+r+','+g+','+b+',0.18)';
     ctx.fillRect(x+0.5, 0, colW-1, barH);
-    ctx.fillStyle='rgba('+r+','+g+','+b+',0.85)';
+    ctx.fillStyle='rgba('+r+','+g+','+b+',0.82)';
     ctx.fillRect(x+0.5, barH-fillH, colW-1, fillH);
 
-    // week tick & label every 7 days
+    // week tick & label
     if(d%7===0){
       ctx.strokeStyle='rgba(0,180,255,0.3)';
       ctx.lineWidth=1;
@@ -1056,16 +1066,36 @@ function drawTimeline(){
     }
   }
 
+  // most-constrained resource line (drawn as a continuous path on top)
+  ctx.beginPath();
+  for(var d=0;d<TOTAL_DAYS;d++){
+    var x=d*colW+colW/2;
+    var y=barH - maxArr[d]*barH;
+    if(d===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle='rgba(255,255,255,0.55)';
+  ctx.lineWidth=1.5;
+  ctx.setLineDash([2,2]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // dot on the line for days where max crosses 85%
+  for(var d=0;d<TOTAL_DAYS;d++){
+    if(maxArr[d]>0.85){
+      var x=d*colW+colW/2;
+      var y=barH - maxArr[d]*barH;
+      ctx.beginPath(); ctx.arc(x,y,2.5,0,Math.PI*2);
+      ctx.fillStyle='#ff4444'; ctx.fill();
+    }
+  }
+
   // selected day cursor
   var sx=currentDay*colW;
   ctx.strokeStyle='rgba(255,255,255,0.9)';
   ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(sx+colW/2,0); ctx.lineTo(sx+colW/2,barH); ctx.stroke();
-  // highlight selected column
-  ctx.fillStyle='rgba(255,255,255,0.12)';
+  ctx.fillStyle='rgba(255,255,255,0.1)';
   ctx.fillRect(sx+0.5, 0, colW-1, barH);
-
-  // hover tooltip day — handled via mousemove
 }
 
 function tlDayFromX(x){
