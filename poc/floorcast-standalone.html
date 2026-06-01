@@ -2631,7 +2631,7 @@ function drawForecastRow(cvs, proj){
   // Background columns with utilization color
   for(var d=0;d<N;d++){
     var u=arr[d]||0;
-    var col=u>0.85?'rgba(255,60,60,':'u>0.65?'rgba(255,170,0,':'rgba(0,200,140,';
+    var col;
     if(u>0.85) col='rgba(255,60,60,';
     else if(u>0.65) col='rgba(255,170,0,';
     else col='rgba(0,200,140,';
