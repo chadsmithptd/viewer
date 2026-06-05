@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuotePro — CNC Estimating</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f1f5f9;--surface:#fff;--sidebar:#1e2536;--sidebar-hover:#2a3347;
+  --hdr:#0f1629;--text:#0f172a;--muted:#64748b;--light:#94a3b8;
+  --border:#e2e8f0;--blue:#2563eb;--blue-lt:#eff6ff;
+  --green:#16a34a;--green-lt:#f0fdf4;--amber:#d97706;--amber-lt:#fffbeb;
+  --red:#dc2626;--red-lt:#fef2f2;
+}
+body{font-family:system-ui,-apple-system,sans-serif;font-size:13px;color:var(--text);
+  background:var(--bg);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── HEADER ── */
+.hdr{background:var(--hdr);color:#fff;padding:0 14px;height:50px;display:flex;
+  align-items:center;gap:12px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.08)}
+.logo{font-weight:800;font-size:14px;letter-spacing:-.3px;color:#fff;
+  display:flex;align-items:center;gap:7px;flex-shrink:0}
+.logo-icon{width:26px;height:26px;background:var(--blue);border-radius:5px;
+  display:flex;align-items:center;justify-content:center;font-size:13px}
+.hdr-sep{width:1px;height:22px;background:rgba(255,255,255,.12);flex-shrink:0}
+.hdr-field{display:flex;flex-direction:column;gap:2px}
+.hdr-field label{font-size:9px;text-transform:uppercase;letter-spacing:.8px;
+  color:rgba(255,255,255,.38)}
+.hdr-input{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+  border-radius:4px;color:#fff;font-size:12px;padding:3px 8px;outline:none;
+  min-width:130px;font-family:inherit}
+.hdr-input:focus{border-color:var(--blue);background:rgba(37,99,235,.18)}
+.qty-grp{display:flex;gap:3px}
+.qty-btn{padding:4px 11px;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.12);border-radius:4px;color:rgba(255,255,255,.65);
+  cursor:pointer;font-size:12px;font-weight:600;transition:all .12s;font-family:inherit}
+.qty-btn.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.qty-btn:hover:not(.active){background:rgba(255,255,255,.14)}
+.hdr-spacer{flex:1}
+.badge{padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.5px}
+.badge.wip{background:rgba(217,119,6,.22);color:#fbbf24}
+.badge.ready{background:rgba(22,163,74,.22);color:#4ade80}
+.hdr-btn{padding:5px 13px;border-radius:5px;font-size:12px;font-weight:600;
+  cursor:pointer;border:none;transition:opacity .12s;font-family:inherit}
+.hdr-btn.sec{background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);
+  border:1px solid rgba(255,255,255,.14)}
+.hdr-btn.pri{background:var(--blue);color:#fff}
+.hdr-btn:hover{opacity:.82}
+
+/* ── WORKSPACE ── */
+.workspace{display:flex;flex:1;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:224px;background:var(--sidebar);flex-shrink:0;
+  display:flex;flex-direction:column;overflow:hidden}
+.sb-hdr{padding:12px 14px 10px;border-bottom:1px solid rgba(255,255,255,.07)}
+.sb-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;
+  color:rgba(255,255,255,.32);margin-bottom:5px}
+.sb-assy{font-size:13px;font-weight:700;color:rgba(255,255,255,.9);line-height:1.3}
+.sb-pn{font-size:10px;color:rgba(255,255,255,.34);margin-top:2px}
+.sb-scroll{flex:1;overflow-y:auto;padding:6px 0}
+.sb-scroll::-webkit-scrollbar{width:3px}
+.sb-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px}
+.sec-hdr{padding:8px 14px 3px;font-size:9px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.7px;color:rgba(255,255,255,.28);display:flex;
+  justify-content:space-between;align-items:center}
+.sec-cnt{background:rgba(255,255,255,.1);padding:1px 6px;border-radius:10px;
+  color:rgba(255,255,255,.38);font-size:9px}
+.bom-item{padding:7px 12px;display:flex;align-items:center;gap:7px;cursor:pointer;
+  border-left:2px solid transparent;transition:all .1s}
+.bom-item:hover{background:var(--sidebar-hover)}
+.bom-item.active{background:rgba(37,99,235,.22);border-left-color:var(--blue)}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot.ns{background:rgba(255,255,255,.18)}
+.dot.rev{background:var(--amber);box-shadow:0 0 0 2px rgba(217,119,6,.25)}
+.dot.ok{background:var(--green)}
+.dot.flag{background:var(--red);box-shadow:0 0 0 2px rgba(220,38,38,.25)}
+.bom-info{flex:1;min-width:0}
+.bom-name{font-size:12px;font-weight:500;color:rgba(255,255,255,.75);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bom-item.active .bom-name{color:#fff}
+.bom-pn{font-size:10px;color:rgba(255,255,255,.28);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bom-cost{font-size:11px;font-weight:700;color:rgba(255,255,255,.4);flex-shrink:0}
+.bom-item.active .bom-cost{color:rgba(255,255,255,.85)}
+
+/* ── MAIN ── */
+.main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.part-hdr{background:var(--surface);padding:14px 18px 0;
+  border-bottom:1px solid var(--border);flex-shrink:0}
+.part-hdr-top{display:flex;align-items:flex-start;gap:14px;margin-bottom:10px}
+.part-thumb{width:62px;height:62px;background:#f8fafc;border:1px solid var(--border);
+  border-radius:8px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;color:var(--light)}
+.part-hdr-info{flex:1}
+.type-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;
+  border-radius:4px;font-size:9px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:4px}
+.type-badge.make{background:#eff6ff;color:#1d4ed8}
+.type-badge.buy{background:#f0fdf4;color:#15803d}
+.type-badge.osp{background:#fff7ed;color:#c2410c}
+.part-name{font-size:18px;font-weight:800;color:var(--text);margin-bottom:3px;
+  letter-spacing:-.3px}
+.part-meta{display:flex;gap:14px;font-size:11px;color:var(--muted)}
+.dfm-pills{display:flex;gap:5px;margin-left:auto;flex-wrap:wrap;align-items:flex-start}
+.dfm-pill{padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;
+  display:flex;align-items:center;gap:3px}
+.dfm-pill.critical{background:#fef2f2;color:#dc2626}
+.dfm-pill.warning{background:#fffbeb;color:#d97706}
+.dfm-pill.info{background:#eff6ff;color:#2563eb}
+.tabs{display:flex}
+.tab{padding:8px 15px;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;
+  border-bottom:2px solid transparent;transition:all .12s;user-select:none}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.tab-body{flex:1;overflow-y:auto;padding:14px 18px}
+.tab-body::-webkit-scrollbar{width:4px}
+.tab-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  margin-bottom:12px;overflow:hidden}
+.card-hdr{padding:10px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;background:#fafbfc}
+.card-title{font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;
+  letter-spacing:.4px}
+.card-body{padding:13px 14px}
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.info-grid.two{grid-template-columns:1fr 1fr}
+.info-item label{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--muted);margin-bottom:3px;font-weight:600}
+.info-item .val{font-size:13px;font-weight:700;color:var(--text)}
+.info-item .val.blue{color:var(--blue)}
+.feat-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.feat-tag{padding:2px 7px;background:#f1f5f9;border:1px solid var(--border);
+  border-radius:4px;font-size:10px;color:var(--muted);font-weight:500}
+.tol-tag{background:#fffbeb;border-color:#fde68a;color:#92400e}
+
+/* ── FORM CONTROLS ── */
+.form-row{display:flex;gap:10px;align-items:flex-end;margin-bottom:10px}
+.fg{display:flex;flex-direction:column;gap:3px}
+.fg label{font-size:10px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.5px}
+.fc{padding:5px 9px;border:1px solid var(--border);border-radius:5px;
+  font-size:12px;color:var(--text);background:var(--surface);outline:none;
+  transition:border-color .12s;font-family:inherit}
+.fc:focus{border-color:var(--blue)}
+select.fc{cursor:pointer}
+
+/* ── OPS TABLE ── */
+.ops-wrap{overflow-x:auto}
+.ops-table{width:100%;border-collapse:collapse;min-width:560px}
+.ops-table th{padding:7px 9px;text-align:left;font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.6px;color:var(--muted);
+  border-bottom:1px solid var(--border);background:#fafbfc;white-space:nowrap}
+.ops-table th.r,.ops-table td.r{text-align:right}
+.ops-table td{padding:7px 9px;border-bottom:1px solid #f1f5f9;font-size:12px;
+  vertical-align:middle}
+.ops-table tr:last-child td{border-bottom:none}
+.ops-table tr:hover td{background:#fafbfc}
+.op-num{font-size:10px;font-weight:800;color:var(--muted);width:28px}
+.ii{padding:3px 6px;border:1px solid transparent;border-radius:4px;
+  font-size:12px;color:var(--text);background:transparent;outline:none;
+  width:72px;text-align:right;transition:all .1s;font-family:inherit}
+.ii:hover{border-color:var(--border);background:var(--surface)}
+.ii:focus{border-color:var(--blue);background:var(--surface);
+  box-shadow:0 0 0 2px rgba(37,99,235,.1)}
+.ii.wide{width:95px;text-align:left}
+.ii.name{width:140px;text-align:left}
+select.ii{cursor:pointer;width:140px;text-align:left}
+.op-cost-cell{font-weight:700;color:var(--text)}
+.ops-table tfoot td{background:#fafbfc;border-top:2px solid var(--border);
+  font-weight:700;font-size:12px}
+.add-op{display:flex;align-items:center;gap:5px;padding:6px 12px;
+  background:none;border:1px dashed var(--border);border-radius:5px;
+  color:var(--muted);font-size:12px;cursor:pointer;width:100%;margin-top:8px;
+  transition:all .12s;font-family:inherit}
+.add-op:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-lt)}
+
+/* ── DFM FLAGS ── */
+.dfm-flag{padding:11px 13px;border-radius:7px;margin-bottom:8px;
+  display:flex;align-items:flex-start;gap:9px;border:1px solid}
+.dfm-flag.critical{background:#fef2f2;border-color:#fecaca}
+.dfm-flag.warning{background:#fffbeb;border-color:#fde68a}
+.dfm-flag.info{background:#eff6ff;border-color:#bfdbfe}
+.dfm-icon{width:19px;height:19px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:10px;font-weight:800;flex-shrink:0;margin-top:1px}
+.critical .dfm-icon{background:#dc2626;color:#fff}
+.warning .dfm-icon{background:#d97706;color:#fff}
+.info .dfm-icon{background:#2563eb;color:#fff}
+.dfm-body{flex:1}
+.dfm-desc{font-size:12px;font-weight:500;color:var(--text);margin-bottom:5px;
+  line-height:1.4}
+.dfm-actions{display:flex;align-items:center;gap:10px}
+.dfm-cost-tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+.critical .dfm-cost-tag{background:#fecaca;color:#991b1b}
+.warning .dfm-cost-tag{background:#fde68a;color:#92400e}
+.info .dfm-cost-tag{background:#bfdbfe;color:#1e40af}
+.toggle-wrap{display:flex;align-items:center;gap:5px;font-size:11px;
+  color:var(--muted);cursor:pointer;user-select:none}
+.tog{width:30px;height:16px;background:#cbd5e1;border-radius:8px;position:relative;
+  transition:background .15s;cursor:pointer;flex-shrink:0}
+.tog.on{background:var(--blue)}
+.tog::after{content:'';position:absolute;width:12px;height:12px;background:#fff;
+  border-radius:50%;top:2px;left:2px;transition:left .15s}
+.tog.on::after{left:16px}
+
+/* ── BUY / OSP VIEWS ── */
+.buy-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.osp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.big-cost{font-size:28px;font-weight:800;color:var(--blue);letter-spacing:-1px}
+.unit-sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── RIGHT PANEL ── */
+.rp{width:256px;background:var(--surface);border-left:1px solid var(--border);
+  flex-shrink:0;display:flex;flex-direction:column;overflow:hidden}
+.rp-hdr{padding:12px 14px 10px;border-bottom:1px solid var(--border);background:#fafbfc}
+.rp-title{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.7px;color:var(--muted)}
+.rp-scroll{flex:1;overflow-y:auto;padding:12px 14px}
+.rp-scroll::-webkit-scrollbar{width:3px}
+.rp-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.progress-bar-wrap{margin-bottom:14px}
+.progress-label{display:flex;justify-content:space-between;font-size:11px;
+  color:var(--muted);margin-bottom:5px}
+.progress-label strong{color:var(--text)}
+.pbar{height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden}
+.pbar-fill{height:100%;background:var(--blue);border-radius:3px;transition:width .3s}
+.cost-sec{margin-bottom:14px}
+.cost-sec-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;
+  color:var(--muted);margin-bottom:7px}
+.cost-line{display:flex;justify-content:space-between;align-items:center;
+  padding:4px 0;font-size:12px;border-bottom:1px solid #f8fafc}
+.cost-line:last-child{border-bottom:none}
+.cost-line .lbl{color:var(--muted)}
+.cost-line .lbl.active{color:var(--blue);font-weight:600}
+.cost-line .amt{font-weight:700;color:var(--text)}
+.cost-line .amt.active{color:var(--blue)}
+.cost-div{border:none;border-top:1px solid var(--border);margin:10px 0}
+.cost-total{display:flex;justify-content:space-between;align-items:center;padding:6px 0}
+.cost-total .lbl{font-size:13px;font-weight:700;color:var(--text)}
+.cost-total .amt{font-size:16px;font-weight:800;color:var(--text)}
+.margin-ctl{margin:12px 0 10px}
+.margin-ctl label{display:flex;justify-content:space-between;font-size:11px;
+  font-weight:600;color:var(--muted);margin-bottom:5px}
+.margin-ctl label span{font-weight:800;color:var(--text)}
+input[type=range]{width:100%;accent-color:var(--blue);cursor:pointer}
+.price-box{background:linear-gradient(135deg,#1d4ed8,#2563eb);border-radius:8px;
+  padding:13px 14px;color:#fff;margin-bottom:10px}
+.price-box-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.7px;
+  opacity:.65;margin-bottom:3px}
+.price-box-val{font-size:26px;font-weight:800;letter-spacing:-1px}
+.price-box-sub{font-size:10px;opacity:.6;margin-top:2px}
+.lt-ctl label{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:5px}
+.lt-opts{display:flex;gap:4px;margin-bottom:14px}
+.lt-btn{flex:1;padding:5px 3px;font-size:10px;font-weight:700;text-align:center;
+  border:1px solid var(--border);border-radius:4px;cursor:pointer;
+  color:var(--muted);background:var(--surface);transition:all .1s;font-family:inherit}
+.lt-btn.active{background:var(--blue-lt);border-color:var(--blue);color:var(--blue)}
+.lt-btn:hover:not(.active){background:#f8fafc}
+.attn-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--muted);margin-bottom:7px}
+.attn-item{display:flex;align-items:center;gap:7px;padding:5px 0;
+  border-bottom:1px solid #f1f5f9;font-size:11px;color:var(--muted);cursor:pointer}
+.attn-item:hover{color:var(--blue)}
+.attn-item:last-child{border-bottom:none}
+.attn-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.gen-btn{width:100%;padding:10px;background:var(--blue);color:#fff;border:none;
+  border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;transition:all .12s;
+  margin-top:6px;font-family:inherit;letter-spacing:-.2px}
+.gen-btn:hover{background:#1d4ed8}
+.empty-state{padding:40px 20px;text-align:center;color:var(--muted)}
+.empty-state svg{opacity:.3;margin-bottom:10px}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="logo">
+    <div class="logo-icon">⚙</div>
+    QuotePro
+  </div>
+  <div class="hdr-sep"></div>
+  <div class="hdr-field">
+    <label>Quote #</label>
+    <input class="hdr-input" id="quoteNum" value="Q-2024-0891" style="min-width:100px">
+  </div>
+  <div class="hdr-field">
+    <label>Customer</label>
+    <input class="hdr-input" id="customer" value="Acme Aerospace LLC">
+  </div>
+  <div class="hdr-field">
+    <label>Rev</label>
+    <input class="hdr-input" id="rev" value="B" style="min-width:40px">
+  </div>
+  <div class="hdr-sep"></div>
+  <div class="hdr-field">
+    <label>Quantity</label>
+    <div class="qty-grp" id="qtyGrp">
+      <button class="qty-btn active" onclick="setQty(1)">1×</button>
+      <button class="qty-btn" onclick="setQty(5)">5×</button>
+      <button class="qty-btn" onclick="setQty(10)">10×</button>
+    </div>
+  </div>
+  <div class="hdr-spacer"></div>
+  <span class="badge wip" id="statusBadge">In Progress</span>
+  <button class="hdr-btn sec">Save Draft</button>
+  <button class="hdr-btn pri" onclick="alert('PDF export coming soon')">Export PDF</button>
+</div>
+
+<!-- WORKSPACE -->
+<div class="workspace">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sb-hdr">
+      <div class="sb-label">Assembly</div>
+      <div class="sb-assy">Hydraulic Manifold Assy</div>
+      <div class="sb-pn">HMA-2024-001 · Rev B</div>
+    </div>
+    <div class="sb-scroll" id="bomTree"></div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main">
+    <div class="part-hdr" id="partHdr">
+      <!-- populated by JS -->
+    </div>
+    <div class="tab-body" id="tabBody">
+      <!-- populated by JS -->
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="rp">
+    <div class="rp-hdr">
+      <div class="rp-title">Quote Summary</div>
+    </div>
+    <div class="rp-scroll" id="rpContent"></div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────────
+const MACHINES = {
+  'Bandsaw':             65,
+  '3-Axis VMC':         125,
+  '5-Axis VMC':         185,
+  'CNC Lathe':          110,
+  'CNC Lathe (Live)':   145,
+  'CMM':                110,
+  'EDM Wire':           150,
+  'Surface Grinder':     95,
+  'Bench / Deburr':      50,
+};
+
+const MATERIALS = {
+  '6061-T6':   { label:'6061-T6 Aluminum',      density:0.0975, cpp:2.85 },
+  '7075-T6':   { label:'7075-T6 Aluminum',      density:0.1028, cpp:4.20 },
+  '303-SS':    { label:'303 Stainless Steel',    density:0.289,  cpp:4.15 },
+  '304-SS':    { label:'304 Stainless Steel',    density:0.289,  cpp:3.95 },
+  '316-SS':    { label:'316 Stainless Steel',    density:0.289,  cpp:5.40 },
+  '17-4':      { label:'17-4 PH Stainless',      density:0.282,  cpp:8.50 },
+  '4140':      { label:'4140 Steel',             density:0.284,  cpp:1.45 },
+  'Ti6Al4V':   { label:'Ti-6Al-4V (Gr. 5)',      density:0.160,  cpp:18.50 },
+  '360-Brass': { label:'360 Brass',              density:0.307,  cpp:4.80 },
+  'Delrin':    { label:'Delrin (POM)',            density:0.051,  cpp:3.20 },
+  'PEEK':      { label:'PEEK',                   density:0.047,  cpp:45.00 },
+};
+
+const OSP_PROCESSES = [
+  'Hard Anodize (Type III)',
+  'Type II Anodize',
+  'Black Oxide',
+  'Passivation',
+  'Electroless Nickel',
+  'Zinc Plating',
+  'Heat Treat – Normalize',
+  'Heat Treat – H900',
+  'Surface Grinding',
+  'Wire EDM',
+];
+
+const state = {
+  activeId: 'P001',
+  qty: 1,
+  margin: 0.35,
+  leadTime: '3-4wk',
+  activeTab: 'overview',
+};
+
+const items = {
+  P001: {
+    id:'P001', type:'make', pn:'HMA-BODY-001', name:'Manifold Body', status:'review',
+    mat:'6061-T6', stock:[4.0,6.0,8.0], scrap:1.05, notes:'',
+    features:{
+      bb:'3.875 × 5.750 × 7.625 in', pockets:8, holes:12, blindHoles:6,
+      threads:14, bores:3, mrPct:42,
+      tols:['Ø1.250 bore ±0.0005" (3×)','Flatness 0.001" sealing face'],
+    },
+    dfm:[
+      {id:'d1',sev:'critical',desc:'Bore Ø1.250 ±0.0005" (3 locations) — CMM first article required',cost:85,on:true},
+      {id:'d2',sev:'warning', desc:'Deep pocket F-12: aspect ratio 6.8:1 — extended reach tooling, reduced feeds',cost:45,on:true},
+      {id:'d3',sev:'warning', desc:'M4×0.7 tapped holes ×6 — helicoil NAS1130 inserts per drawing callout',cost:30,on:true},
+      {id:'d4',sev:'info',    desc:'Ra 32 μin sealing surfaces (2×) — extra finishing pass required',cost:20,on:true},
+    ],
+    ops:[
+      {id:'o1',op:'10',name:'Saw',        mach:'Bandsaw',      su:0.25, cy:0.08, rate:65},
+      {id:'o2',op:'20',name:'Mill 1st',   mach:'3-Axis VMC',   su:1.50, cy:2.30, rate:125},
+      {id:'o3',op:'30',name:'Mill 2nd',   mach:'3-Axis VMC',   su:0.50, cy:1.10, rate:125},
+      {id:'o4',op:'40',name:'Drill & Tap',mach:'3-Axis VMC',   su:0.25, cy:0.45, rate:125},
+      {id:'o5',op:'50',name:'Deburr',     mach:'Bench / Deburr',su:0,   cy:0.50, rate:50},
+      {id:'o6',op:'60',name:'CMM Insp',   mach:'CMM',          su:0.25, cy:0.50, rate:110},
+    ],
+  },
+  P002: {
+    id:'P002', type:'make', pn:'HMA-CAP-002', name:'End Cap', status:'complete',
+    mat:'6061-T6', stock:[2.0,3.0,0.75], scrap:1.05, notes:'',
+    features:{
+      bb:'1.875 × 2.875 × 0.625 in', pockets:1, holes:4, blindHoles:0,
+      threads:4, bores:1, mrPct:22,
+      tols:['Ø0.625 bore ±0.001"'],
+    },
+    dfm:[
+      {id:'d1',sev:'info',desc:'Ø0.625 ±0.001" bore — verify with plug gauge at inspection',cost:12,on:true},
+    ],
+    ops:[
+      {id:'o1',op:'10',name:'Saw',      mach:'Bandsaw',    su:0.25, cy:0.05, rate:65},
+      {id:'o2',op:'20',name:'Mill 1st', mach:'3-Axis VMC', su:1.00, cy:0.65, rate:125},
+      {id:'o3',op:'30',name:'Mill 2nd', mach:'3-Axis VMC', su:0.25, cy:0.30, rate:125},
+      {id:'o4',op:'40',name:'Deburr',   mach:'Bench / Deburr',su:0, cy:0.15, rate:50},
+    ],
+  },
+  P003: {
+    id:'P003', type:'make', pn:'HMA-BKT-003', name:'Mounting Bracket', status:'not-started',
+    mat:'304-SS', stock:[1.5,3.0,6.0], scrap:1.08, notes:'',
+    features:{
+      bb:'1.375 × 2.875 × 5.875 in', pockets:2, holes:8, blindHoles:2,
+      threads:6, bores:0, mrPct:31,
+      tols:[],
+    },
+    dfm:[
+      {id:'d1',sev:'info',desc:'304 SS workpiece — verify feed/speed for tool life vs aluminum baseline',cost:0,on:false},
+    ],
+    ops:[
+      {id:'o1',op:'10',name:'Saw',      mach:'Bandsaw',    su:0.25, cy:0.08, rate:65},
+      {id:'o2',op:'20',name:'Mill 1st', mach:'3-Axis VMC', su:1.25, cy:1.40, rate:125},
+      {id:'o3',op:'30',name:'Mill 2nd', mach:'3-Axis VMC', su:0.50, cy:0.60, rate:125},
+      {id:'o4',op:'40',name:'Deburr',   mach:'Bench / Deburr',su:0, cy:0.25, rate:50},
+    ],
+  },
+  B001: {
+    id:'B001', type:'buy', pn:'ORK-024-NBR', name:'O-Ring Kit', status:'complete',
+    supplier:'Parker Hannifin', desc:'NBR O-ring seal kit — 24 pcs assorted sizes per assembly',
+    unitCost:18.50, notes:'',
+  },
+  B002: {
+    id:'B002', type:'buy', pn:'SHCS-M5-20-A2', name:'SHCS M5×20 (12×)', status:'complete',
+    supplier:'McMaster-Carr', desc:'Socket Head Cap Screw M5×20mm 18-8 SS, pkg/12',
+    unitCost:6.45, notes:'',
+  },
+  O001: {
+    id:'O001', type:'osp', pn:'OSP-ANOD-H3', name:'Hard Anodize Type III', status:'review',
+    process:'Hard Anodize (Type III)', spec:'MIL-A-8625 Type III, Class 1, 0.001" min',
+    vendor:'Pacific Plating', applies:['P001','P002'], unitCost:85.00, ltDays:7, notes:'',
+  },
+  O002: {
+    id:'O002', type:'osp', pn:'OSP-PASS-SS', name:'Passivation', status:'not-started',
+    process:'Passivation', spec:'ASTM A967, Method C',
+    vendor:'In-house', applies:['P003'], unitCost:22.00, ltDays:3, notes:'',
+  },
+};
+
+// ─────────────────────────────────────────────
+// COST CALCULATIONS
+// ─────────────────────────────────────────────
+function calcMaterialCost(item) {
+  const mat = MATERIALS[item.mat];
+  if (!mat) return 0;
+  const [w,h,l] = item.stock;
+  return w * h * l * mat.density * mat.cpp * (item.scrap || 1.05);
+}
+
+function calcOpCost(op, qty) {
+  return ((op.su / qty) + op.cy) * op.rate;
+}
+
+function calcMachiningCost(item, qty) {
+  return item.ops.reduce((s, op) => s + calcOpCost(op, qty), 0);
+}
+
+function calcDFMCost(item) {
+  return item.dfm.filter(f => f.on).reduce((s, f) => s + f.cost, 0);
+}
+
+function calcItemCost(item, qty) {
+  if (item.type === 'make') {
+    return calcMaterialCost(item) + calcMachiningCost(item, qty) + calcDFMCost(item);
+  }
+  return item.unitCost || 0;
+}
+
+function calcAll(qty) {
+  const vals = Object.values(items);
+  const make = vals.filter(i=>i.type==='make').reduce((s,i)=>s+calcItemCost(i,qty),0);
+  const buy  = vals.filter(i=>i.type==='buy').reduce((s,i)=>s+calcItemCost(i,qty),0);
+  const osp  = vals.filter(i=>i.type==='osp').reduce((s,i)=>s+calcItemCost(i,qty),0);
+  return {make,buy,osp,total:make+buy+osp};
+}
+
+function quotePrice(cost) { return cost / (1 - state.margin); }
+
+// ─────────────────────────────────────────────
+// SIDEBAR
+// ─────────────────────────────────────────────
+function renderBOM() {
+  const tree = document.getElementById('bomTree');
+  const makeItems = Object.values(items).filter(i=>i.type==='make');
+  const buyItems  = Object.values(items).filter(i=>i.type==='buy');
+  const ospItems  = Object.values(items).filter(i=>i.type==='osp');
+
+  const section = (label, list) => {
+    if (!list.length) return '';
+    const rows = list.map(i => {
+      const cost = calcItemCost(i, state.qty);
+      const dotCls = i.status === 'complete' ? 'ok' :
+                     i.status === 'review'   ? 'rev' :
+                     i.status === 'flagged'  ? 'flag' : 'ns';
+      return `<div class="bom-item${state.activeId===i.id?' active':''}" onclick="selectItem('${i.id}')">
+        <div class="dot ${dotCls}"></div>
+        <div class="bom-info">
+          <div class="bom-name">${i.name}</div>
+          <div class="bom-pn">${i.pn}</div>
+        </div>
+        <div class="bom-cost">$${cost.toFixed(0)}</div>
+      </div>`;
+    }).join('');
+    return `<div class="bom-section">
+      <div class="sec-hdr">${label}<span class="sec-cnt">${list.length}</span></div>
+      ${rows}
+    </div>`;
+  };
+
+  tree.innerHTML =
+    section('Make Items', makeItems) +
+    section('Buy Items',  buyItems)  +
+    section('OSP',        ospItems);
+}
+
+// ─────────────────────────────────────────────
+// PART HEADER
+// ─────────────────────────────────────────────
+function renderPartHeader(item) {
+  const hdr = document.getElementById('partHdr');
+  const typeLabel = item.type === 'make' ? 'MAKE' : item.type === 'buy' ? 'BUY' : 'OUTSIDE PROCESS';
+
+  let pills = '';
+  if (item.type === 'make') {
+    const crit = item.dfm.filter(f=>f.sev==='critical'&&f.on).length;
+    const warn = item.dfm.filter(f=>f.sev==='warning'&&f.on).length;
+    const inf  = item.dfm.filter(f=>f.sev==='info'&&f.on).length;
+    if (crit) pills += `<span class="dfm-pill critical">⚠ ${crit} Critical</span>`;
+    if (warn) pills += `<span class="dfm-pill warning">! ${warn} Warning</span>`;
+    if (inf)  pills += `<span class="dfm-pill info">ℹ ${inf} Info</span>`;
+  }
+
+  const metaContent = item.type === 'make'
+    ? `<span>${item.mat ? MATERIALS[item.mat]?.label : '—'}</span>
+       <span>Stock: ${item.stock.join(' × ')}"</span>
+       <span>Material: $${calcMaterialCost(item).toFixed(2)}</span>`
+    : item.type === 'buy'
+    ? `<span>${item.supplier}</span>`
+    : `<span>${item.process}</span><span>${item.vendor}</span>`;
+
+  const tabs = item.type === 'make'
+    ? ['overview','operations','dfm','notes']
+    : item.type === 'buy'
+    ? ['details','notes']
+    : ['details','notes'];
+
+  hdr.innerHTML = `
+    <div class="part-hdr-top">
+      <div class="part-thumb">
+        <svg width="38" height="38" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="4" y="4" width="30" height="30" rx="3" stroke="#64748b" stroke-width="1.5" fill="none"/>
+          <circle cx="19" cy="19" r="6" stroke="#64748b" stroke-width="1.5" fill="none"/>
+          <line x1="4" y1="13" x2="34" y2="13" stroke="#64748b" stroke-width="1"/>
+          <line x1="4" y1="25" x2="34" y2="25" stroke="#64748b" stroke-width="1"/>
+        </svg>
+      </div>
+      <div class="part-hdr-info">
+        <div class="type-badge ${item.type}">${typeLabel}</div>
+        <div class="part-name">${item.name}</div>
+        <div class="part-meta">${metaContent}</div>
+      </div>
+      <div class="dfm-pills">${pills}</div>
+    </div>
+    <div class="tabs" id="tabRow">
+      ${tabs.map(t=>`<div class="tab${state.activeTab===t?' active':''}" onclick="switchTab('${t}')">${t.charAt(0).toUpperCase()+t.slice(1)}</div>`).join('')}
+    </div>`;
+}
+
+// ─────────────────────────────────────────────
+// TAB CONTENT
+// ─────────────────────────────────────────────
+function renderTabBody(item) {
+  const body = document.getElementById('tabBody');
+  if (item.type === 'make') {
+    body.innerHTML = `
+      <div class="tab-pane${state.activeTab==='overview'?' active':''}" id="pane-overview">
+        ${renderOverview(item)}
+      </div>
+      <div class="tab-pane${state.activeTab==='operations'?' active':''}" id="pane-operations">
+        ${renderOperations(item)}
+      </div>
+      <div class="tab-pane${state.activeTab==='dfm'?' active':''}" id="pane-dfm">
+        ${renderDFM(item)}
+      </div>
+      <div class="tab-pane${state.activeTab==='notes'?' active':''}" id="pane-notes">
+        ${renderNotes(item)}
+      </div>`;
+  } else if (item.type === 'buy') {
+    body.innerHTML = `
+      <div class="tab-pane${state.activeTab==='details'?' active':''}" id="pane-details">
+        ${renderBuyDetails(item)}
+      </div>
+      <div class="tab-pane${state.activeTab==='notes'?' active':''}" id="pane-notes">
+        ${renderNotes(item)}
+      </div>`;
+  } else {
+    body.innerHTML = `
+      <div class="tab-pane${state.activeTab==='details'?' active':''}" id="pane-details">
+        ${renderOSPDetails(item)}
+      </div>
+      <div class="tab-pane${state.activeTab==='notes'?' active':''}" id="pane-notes">
+        ${renderNotes(item)}
+      </div>`;
+  }
+  bindOpsListeners(item);
+  bindDFMListeners(item);
+  bindMaterialListeners(item);
+  bindBuyListeners(item);
+  bindOSPListeners(item);
+}
+
+// ── Overview Tab ──
+function renderOverview(item) {
+  const f = item.features;
+  const mat = MATERIALS[item.mat];
+  const matOpts = Object.entries(MATERIALS).map(([k,v])=>
+    `<option value="${k}"${item.mat===k?' selected':''}>${v.label}</option>`
+  ).join('');
+
+  const tolTags = (f.tols||[]).map(t=>`<span class="feat-tag tol-tag">⚠ ${t}</span>`).join('');
+  const [w,h,l] = item.stock;
+  const stockWeightLbs = w*h*l * (mat?.density||0.098);
+  const matCost = calcMaterialCost(item);
+
+  return `
+  <div class="card">
+    <div class="card-hdr"><span class="card-title">Extracted Features</span></div>
+    <div class="card-body">
+      <div class="info-grid" style="margin-bottom:10px">
+        <div class="info-item"><label>Bounding Box</label><div class="val">${f.bb}</div></div>
+        <div class="info-item"><label>Material Removal</label><div class="val blue">${f.mrPct}%</div></div>
+        <div class="info-item"><label>Pockets</label><div class="val">${f.pockets}</div></div>
+        <div class="info-item"><label>Through Holes</label><div class="val">${f.holes}</div></div>
+        <div class="info-item"><label>Blind Holes</label><div class="val">${f.blindHoles}</div></div>
+        <div class="info-item"><label>Threads</label><div class="val">${f.threads}</div></div>
+        <div class="info-item"><label>Bores</label><div class="val">${f.bores}</div></div>
+      </div>
+      ${tolTags ? `<div style="margin-top:4px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px">Tight Tolerances</div><div class="feat-tags">${tolTags}</div></div>` : ''}
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hdr"><span class="card-title">Material & Raw Stock</span></div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="fg" style="flex:2">
+          <label>Material</label>
+          <select class="fc" id="matSel" data-id="${item.id}">${matOpts}</select>
+        </div>
+        <div class="fg">
+          <label>Cost/lb</label>
+          <input class="fc" id="matCpp" value="$${mat?.cpp.toFixed(2)||'—'}" style="width:80px" readonly>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="fg">
+          <label>W (in)</label>
+          <input class="fc ii" id="stockW" value="${w}" data-id="${item.id}" style="width:70px">
+        </div>
+        <div class="fg">
+          <label>H (in)</label>
+          <input class="fc ii" id="stockH" value="${h}" data-id="${item.id}" style="width:70px">
+        </div>
+        <div class="fg">
+          <label>L (in)</label>
+          <input class="fc ii" id="stockL" value="${l}" data-id="${item.id}" style="width:70px">
+        </div>
+        <div class="fg">
+          <label>Scrap</label>
+          <input class="fc ii" id="stockScrap" value="${item.scrap}" data-id="${item.id}" style="width:60px">
+        </div>
+      </div>
+      <div class="info-grid two" style="margin-top:4px">
+        <div class="info-item"><label>Raw Stock Wt</label><div class="val" id="rawWt">${stockWeightLbs.toFixed(2)} lbs</div></div>
+        <div class="info-item"><label>Material Cost</label><div class="val blue" id="matCostDisp">$${matCost.toFixed(2)}</div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Operations Tab ──
+function renderOperations(item) {
+  const qty = state.qty;
+  const machOpts = Object.keys(MACHINES).map(m=>
+    `<option value="${m}">${m} ($${MACHINES[m]}/hr)</option>`
+  ).join('');
+
+  const rows = item.ops.map(op => {
+    const cost = calcOpCost(op, qty);
+    return `<tr data-op="${op.id}">
+      <td class="op-num">${op.op}</td>
+      <td><input class="ii name" value="${op.name}" data-field="name" data-op="${op.id}" data-id="${item.id}" onchange="updateOp(this)"></td>
+      <td>
+        <select class="ii" style="width:140px" data-field="mach" data-op="${op.id}" data-id="${item.id}" onchange="updateOp(this)">
+          ${Object.keys(MACHINES).map(m=>`<option value="${m}"${op.mach===m?' selected':''}>${m}</option>`).join('')}
+        </select>
+      </td>
+      <td class="r"><input class="ii" value="${op.su.toFixed(2)}" data-field="su" data-op="${op.id}" data-id="${item.id}" onchange="updateOp(this)"></td>
+      <td class="r"><input class="ii" value="${op.cy.toFixed(3)}" data-field="cy" data-op="${op.id}" data-id="${item.id}" onchange="updateOp(this)"></td>
+      <td class="r"><input class="ii" value="${op.rate}" data-field="rate" data-op="${op.id}" data-id="${item.id}" onchange="updateOp(this)"></td>
+      <td class="r op-cost-cell" id="opc-${op.id}">$${cost.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  const machTotal = calcMachiningCost(item, qty);
+
+  return `
+  <div class="card">
+    <div class="card-hdr">
+      <span class="card-title">Operations (Qty ${qty}×)</span>
+      <span style="font-size:11px;color:var(--muted)">Setup amortized over ${qty} pc${qty>1?'s':''}</span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div class="ops-wrap">
+        <table class="ops-table">
+          <thead><tr>
+            <th>Op</th><th>Name</th><th>Machine</th>
+            <th class="r">Setup Hrs</th><th class="r">Cycle Hrs</th>
+            <th class="r">Rate $/hr</th><th class="r">Cost/pc</th>
+          </tr></thead>
+          <tbody id="opRows-${item.id}">${rows}</tbody>
+          <tfoot><tr>
+            <td colspan="6" class="r" style="padding-right:9px">Total Machining</td>
+            <td class="r" id="machTotal-${item.id}">$${machTotal.toFixed(2)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+      <div style="padding:8px 14px 12px">
+        <button class="add-op" onclick="addOp('${item.id}')">+ Add Operation</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── DFM Tab ──
+function renderDFM(item) {
+  const flags = item.dfm.map(f => `
+    <div class="dfm-flag ${f.sev}" id="dfmflag-${f.id}">
+      <div class="dfm-icon">${f.sev==='critical'?'!':f.sev==='warning'?'!':'i'}</div>
+      <div class="dfm-body">
+        <div class="dfm-desc">${f.desc}</div>
+        <div class="dfm-actions">
+          ${f.cost > 0 ? `<span class="dfm-cost-tag">+$${f.cost.toFixed(2)} cost impact</span>` : '<span style="font-size:11px;color:var(--muted)">No cost impact</span>'}
+          <label class="toggle-wrap">
+            <div class="tog ${f.on?'on':''}" id="tog-${f.id}" data-dfm="${f.id}" data-id="${item.id}" onclick="toggleDFM(this)"></div>
+            <span>${f.on?'Included':'Excluded'}</span>
+          </label>
+        </div>
+      </div>
+    </div>`).join('');
+
+  const total = calcDFMCost(item);
+  return `
+  <div class="card">
+    <div class="card-hdr">
+      <span class="card-title">DFM Analysis — ${item.dfm.length} Flag${item.dfm.length!==1?'s':''}</span>
+      <span style="font-size:12px;font-weight:700;color:var(--blue)">DFM Cost: $<span id="dfmTotal-${item.id}">${total.toFixed(2)}</span></span>
+    </div>
+    <div class="card-body">${flags}</div>
+  </div>`;
+}
+
+// ── Notes Tab ──
+function renderNotes(item) {
+  return `
+  <div class="card">
+    <div class="card-hdr"><span class="card-title">Quoter Notes</span></div>
+    <div class="card-body">
+      <textarea class="fc" id="notesArea-${item.id}" rows="6"
+        style="width:100%;resize:vertical;font-size:12px;line-height:1.5"
+        placeholder="Add notes, assumptions, vendor quotes, open questions…"
+        onchange="items['${item.id}'].notes=this.value">${item.notes}</textarea>
+    </div>
+  </div>`;
+}
+
+// ── Buy Details ──
+function renderBuyDetails(item) {
+  return `
+  <div class="card">
+    <div class="card-hdr"><span class="card-title">Purchase Item</span></div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="fg" style="flex:1">
+          <label>Supplier</label>
+          <input class="fc" id="buySupplier-${item.id}" value="${item.supplier}"
+            onchange="items['${item.id}'].supplier=this.value;refreshAll()">
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:12px">
+        <label>Description</label>
+        <input class="fc" style="width:100%" id="buyDesc-${item.id}" value="${item.desc}"
+          onchange="items['${item.id}'].desc=this.value">
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:16px">
+        <div class="fg">
+          <label>Unit Cost</label>
+          <input class="fc" id="buyUnitCost-${item.id}" value="${item.unitCost.toFixed(2)}"
+            style="width:100px" onchange="updateBuyCost('${item.id}',this.value)">
+        </div>
+        <div>
+          <div class="big-cost" id="buyTotal-${item.id}">$${item.unitCost.toFixed(2)}</div>
+          <div class="unit-sub">per assembly</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── OSP Details ──
+function renderOSPDetails(item) {
+  const procOpts = OSP_PROCESSES.map(p=>
+    `<option${item.process===p?' selected':''}>${p}</option>`).join('');
+  return `
+  <div class="card">
+    <div class="card-hdr"><span class="card-title">Outside Process</span></div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="fg" style="flex:1">
+          <label>Process</label>
+          <select class="fc" id="ospProc-${item.id}" onchange="items['${item.id}'].process=this.value">${procOpts}</select>
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Spec / Drawing Callout</label>
+        <input class="fc" style="width:100%" id="ospSpec-${item.id}" value="${item.spec}"
+          onchange="items['${item.id}'].spec=this.value">
+      </div>
+      <div class="form-row">
+        <div class="fg" style="flex:1">
+          <label>Vendor</label>
+          <input class="fc" id="ospVendor-${item.id}" value="${item.vendor}"
+            onchange="items['${item.id}'].vendor=this.value">
+        </div>
+        <div class="fg">
+          <label>Lead (days)</label>
+          <input class="fc" id="ospLT-${item.id}" value="${item.ltDays}"
+            style="width:80px" onchange="updateOSP('${item.id}','ltDays',this.value)">
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:16px;margin-top:8px">
+        <div class="fg">
+          <label>Unit Cost</label>
+          <input class="fc" id="ospCost-${item.id}" value="${item.unitCost.toFixed(2)}"
+            style="width:100px" onchange="updateOSP('${item.id}','unitCost',this.value)">
+        </div>
+        <div>
+          <div class="big-cost" id="ospTotal-${item.id}">$${item.unitCost.toFixed(2)}</div>
+          <div class="unit-sub">per assembly · ${item.ltDays} day lead</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────
+// RIGHT PANEL
+// ─────────────────────────────────────────────
+function renderRightPanel() {
+  const qty = state.qty;
+  const totals = calcAll(qty);
+  const qp = quotePrice(totals.total);
+  const pct = Math.round(state.margin * 100);
+
+  const makeItems = Object.values(items).filter(i=>i.type==='make');
+  const buyItems  = Object.values(items).filter(i=>i.type==='buy');
+  const ospItems  = Object.values(items).filter(i=>i.type==='osp');
+
+  const itemLine = (i) => {
+    const cost = calcItemCost(i, qty);
+    const isActive = state.activeId === i.id;
+    return `<div class="cost-line" onclick="selectItem('${i.id}')" style="cursor:pointer">
+      <span class="lbl${isActive?' active':''}">${i.name}</span>
+      <span class="amt${isActive?' active':''}">$${cost.toFixed(2)}</span>
+    </div>`;
+  };
+
+  const completed = Object.values(items).filter(i=>i.status==='complete').length;
+  const totalItems = Object.values(items).length;
+  const progPct = Math.round(completed/totalItems*100);
+
+  const attnItems = Object.values(items).filter(i=>i.status==='not-started'||i.status==='review');
+  const attnRows = attnItems.map(i=>`
+    <div class="attn-item" onclick="selectItem('${i.id}')">
+      <div class="attn-dot" style="background:${i.status==='review'?'var(--amber)':'var(--light)'}"></div>
+      ${i.name}
+    </div>`).join('');
+
+  const ltOpts = ['1-2wk','3-4wk','6-8wk','Custom'];
+  const ltBtns = ltOpts.map(o=>
+    `<button class="lt-btn${state.leadTime===o?' active':''}" onclick="setLT('${o}')">${o}</button>`
+  ).join('');
+
+  document.getElementById('rpContent').innerHTML = `
+    <div class="progress-bar-wrap">
+      <div class="progress-label">
+        <span>Items reviewed</span>
+        <strong>${completed} / ${totalItems}</strong>
+      </div>
+      <div class="pbar"><div class="pbar-fill" style="width:${progPct}%"></div></div>
+    </div>
+
+    <div class="cost-sec">
+      <div class="cost-sec-lbl">Make Items</div>
+      ${makeItems.map(itemLine).join('')}
+      <div class="cost-line" style="border-top:1px solid var(--border);margin-top:3px;padding-top:6px">
+        <span class="lbl" style="font-weight:700;color:var(--text)">Subtotal</span>
+        <span class="amt">$${totals.make.toFixed(2)}</span>
+      </div>
+    </div>
+
+    <div class="cost-sec">
+      <div class="cost-sec-lbl">Buy Items</div>
+      ${buyItems.map(itemLine).join('')}
+      <div class="cost-line" style="border-top:1px solid var(--border);margin-top:3px;padding-top:6px">
+        <span class="lbl" style="font-weight:700;color:var(--text)">Subtotal</span>
+        <span class="amt">$${totals.buy.toFixed(2)}</span>
+      </div>
+    </div>
+
+    <div class="cost-sec">
+      <div class="cost-sec-lbl">Outside Process</div>
+      ${ospItems.map(itemLine).join('')}
+      <div class="cost-line" style="border-top:1px solid var(--border);margin-top:3px;padding-top:6px">
+        <span class="lbl" style="font-weight:700;color:var(--text)">Subtotal</span>
+        <span class="amt">$${totals.osp.toFixed(2)}</span>
+      </div>
+    </div>
+
+    <hr class="cost-div">
+    <div class="cost-total">
+      <span class="lbl">Total Cost</span>
+      <span class="amt">$${totals.total.toFixed(2)}</span>
+    </div>
+
+    <div class="margin-ctl">
+      <label>Margin <span id="marginPct">${pct}%</span></label>
+      <input type="range" min="0" max="70" value="${pct}"
+        oninput="setMargin(this.value/100)">
+    </div>
+
+    <div class="price-box">
+      <div class="price-box-lbl">Quote Price (${qty}×)</div>
+      <div class="price-box-val">$${qp.toFixed(2)}</div>
+      <div class="price-box-sub">$${(qp/qty).toFixed(2)} per piece · ${pct}% margin</div>
+    </div>
+
+    <div class="lt-ctl">
+      <label>Lead Time</label>
+      <div class="lt-opts">${ltBtns}</div>
+    </div>
+
+    ${attnRows ? `<div class="attn-hdr">Needs Attention</div>${attnRows}` : ''}
+
+    <button class="gen-btn" onclick="alert('PDF output coming soon')">Generate Quote PDF</button>`;
+}
+
+// ─────────────────────────────────────────────
+// EVENT HANDLERS
+// ─────────────────────────────────────────────
+function selectItem(id) {
+  state.activeId = id;
+  state.activeTab = items[id].type === 'make' ? 'overview' :
+                    items[id].type === 'buy'  ? 'details'  : 'details';
+  refreshAll();
+}
+
+function setQty(q) {
+  state.qty = q;
+  document.querySelectorAll('.qty-btn').forEach(b=>b.classList.toggle('active', +b.textContent===q));
+  refreshAll();
+}
+
+function setMargin(v) {
+  state.margin = v;
+  document.getElementById('marginPct').textContent = Math.round(v*100)+'%';
+  renderRightPanel();
+}
+
+function setLT(v) { state.leadTime = v; renderRightPanel(); }
+
+function switchTab(t) {
+  state.activeTab = t;
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.textContent.toLowerCase()===t));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  const pane = document.getElementById('pane-'+t);
+  if (pane) pane.classList.add('active');
+}
+
+function updateOp(el) {
+  const id  = el.dataset.id;
+  const opId = el.dataset.op;
+  const field = el.dataset.field;
+  const item = items[id];
+  const op = item.ops.find(o=>o.id===opId);
+  if (!op) return;
+  if (field === 'name') op.name = el.value;
+  else if (field === 'mach') { op.mach = el.value; op.rate = MACHINES[el.value] || op.rate; }
+  else op[field] = parseFloat(el.value) || 0;
+  refreshCosts(item);
+}
+
+function toggleDFM(el) {
+  const id = el.dataset.id;
+  const dfmId = el.dataset.dfm;
+  const item = items[id];
+  const flag = item.dfm.find(f=>f.id===dfmId);
+  if (!flag) return;
+  flag.on = !flag.on;
+  el.classList.toggle('on', flag.on);
+  el.nextElementSibling.textContent = flag.on ? 'Included' : 'Excluded';
+  const totalEl = document.getElementById('dfmTotal-'+id);
+  if (totalEl) totalEl.textContent = calcDFMCost(item).toFixed(2);
+  refreshCosts(item);
+}
+
+function updateBuyCost(id, v) {
+  items[id].unitCost = parseFloat(v) || 0;
+  const el = document.getElementById('buyTotal-'+id);
+  if (el) el.textContent = '$'+items[id].unitCost.toFixed(2);
+  refreshCosts(items[id]);
+}
+
+function updateOSP(id, field, v) {
+  items[id][field] = parseFloat(v) || 0;
+  const el = document.getElementById('ospTotal-'+id);
+  if (el) el.textContent = '$'+items[id].unitCost.toFixed(2);
+  refreshCosts(items[id]);
+}
+
+function addOp(id) {
+  const item = items[id];
+  const lastOp = item.ops[item.ops.length-1];
+  const nextNum = lastOp ? String(+lastOp.op+10).padStart(2,'0') : '10';
+  item.ops.push({
+    id:'o'+Date.now(), op:nextNum, name:'New Operation',
+    mach:'3-Axis VMC', su:0.5, cy:0.5, rate:125
+  });
+  state.activeTab = 'operations';
+  refreshAll();
+}
+
+function markComplete(id) {
+  items[id].status = 'complete';
+  refreshAll();
+}
+
+function refreshCosts(item) {
+  const qty = state.qty;
+  if (item.type === 'make') {
+    item.ops.forEach(op => {
+      const el = document.getElementById('opc-'+op.id);
+      if (el) el.textContent = '$'+calcOpCost(op,qty).toFixed(2);
+    });
+    const mtEl = document.getElementById('machTotal-'+item.id);
+    if (mtEl) mtEl.textContent = '$'+calcMachiningCost(item,qty).toFixed(2);
+    const matEl = document.getElementById('matCostDisp');
+    if (matEl) matEl.textContent = '$'+calcMaterialCost(item).toFixed(2);
+  }
+  renderBOM();
+  renderRightPanel();
+}
+
+function refreshAll() {
+  const item = items[state.activeId];
+  renderBOM();
+  renderPartHeader(item);
+  renderTabBody(item);
+  renderRightPanel();
+}
+
+// ── Material / stock listeners ──
+function bindMaterialListeners(item) {
+  if (item.type !== 'make') return;
+  const matSel = document.getElementById('matSel');
+  if (matSel) matSel.addEventListener('change', e => {
+    items[item.id].mat = e.target.value;
+    const mat = MATERIALS[e.target.value];
+    const cppEl = document.getElementById('matCpp');
+    if (cppEl && mat) cppEl.value = '$'+mat.cpp.toFixed(2);
+    updateStockDisplay(item);
+    refreshCosts(items[item.id]);
+  });
+  ['stockW','stockH','stockL','stockScrap'].forEach(fid => {
+    const el = document.getElementById(fid);
+    if (!el) return;
+    el.addEventListener('change', () => {
+      const w = parseFloat(document.getElementById('stockW')?.value)||0;
+      const h = parseFloat(document.getElementById('stockH')?.value)||0;
+      const l = parseFloat(document.getElementById('stockL')?.value)||0;
+      const sc= parseFloat(document.getElementById('stockScrap')?.value)||1.05;
+      items[item.id].stock = [w,h,l];
+      items[item.id].scrap = sc;
+      updateStockDisplay(items[item.id]);
+      refreshCosts(items[item.id]);
+    });
+  });
+}
+
+function updateStockDisplay(item) {
+  const mat = MATERIALS[item.mat];
+  if (!mat) return;
+  const [w,h,l] = item.stock;
+  const wt = w*h*l*mat.density;
+  const wtEl = document.getElementById('rawWt');
+  const mcEl = document.getElementById('matCostDisp');
+  if (wtEl) wtEl.textContent = wt.toFixed(2)+' lbs';
+  if (mcEl) mcEl.textContent = '$'+calcMaterialCost(item).toFixed(2);
+}
+
+function bindOpsListeners(item) { /* inline onchange used */ }
+function bindDFMListeners(item) { /* inline onclick used */ }
+function bindBuyListeners(item) { /* inline onchange used */ }
+function bindOSPListeners(item) { /* inline onchange used */ }
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+refreshAll();
+</script>
+</body>
+</html>
