@@ -125,12 +125,11 @@ body{font-family:system-ui,-apple-system,sans-serif;font-size:13px;color:var(--t
 .vp-perf{position:absolute;top:8px;right:8px;font-size:9px;color:rgba(255,255,255,.18);
   font-family:monospace;text-align:right;line-height:1.6}
 .vp-toggle-btn{padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;
-  cursor:pointer;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);
-  color:rgba(255,255,255,.75);transition:all .12s;font-family:inherit;
+  cursor:pointer;border:1px solid var(--border);background:#f1f5f9;
+  color:var(--muted);transition:all .12s;font-family:inherit;
   display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0}
-.vp-toggle-btn:hover{background:rgba(255,255,255,.15);color:#fff}
-.vp-toggle-btn.open{background:rgba(37,99,235,.25);border-color:rgba(37,99,235,.5);
-  color:var(--blue)}
+.vp-toggle-btn:hover{background:var(--border);color:var(--text)}
+.vp-toggle-btn.open{background:var(--blue-lt);border-color:var(--blue);color:var(--blue)}
 
 /* ── PART HEADER ── */
 .part-hdr{background:var(--surface);padding:14px 18px 0;
