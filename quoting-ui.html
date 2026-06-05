@@ -87,7 +87,52 @@ body{font-family:system-ui,-apple-system,sans-serif;font-size:13px;color:var(--t
 .bom-item.active .bom-cost{color:rgba(255,255,255,.85)}
 
 /* ── MAIN ── */
-.main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.main{flex:1;overflow:hidden;display:flex;flex-direction:row}
+.main-inner{flex:1;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── VIEWER PANEL ── */
+.viewer-panel{width:360px;background:#111827;border-right:1px solid #0a0e18;
+  flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;
+  transition:width .2s ease,border .2s ease}
+.viewer-panel.closed{width:0;border-right:none}
+.vp-tabs{display:flex;align-items:center;gap:0;background:#0f1729;
+  border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0}
+.vp-tab{padding:8px 14px;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);
+  cursor:pointer;border-bottom:2px solid transparent;transition:all .12s;white-space:nowrap}
+.vp-tab:hover{color:rgba(255,255,255,.7)}
+.vp-tab.active{color:#fff;border-bottom-color:var(--blue)}
+.vp-filename{margin-left:auto;padding:0 12px;font-size:10px;color:rgba(255,255,255,.25);
+  font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
+.vp-tools{display:flex;flex-direction:column;gap:1px;padding:6px 4px;
+  background:#0f1729;border-right:1px solid rgba(255,255,255,.06);flex-shrink:0}
+.vp-tool{width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+  border-radius:5px;cursor:pointer;font-size:13px;color:rgba(255,255,255,.35);
+  transition:all .12s;border:1px solid transparent;user-select:none;title:attr(title)}
+.vp-tool:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.8);
+  border-color:rgba(255,255,255,.1)}
+.vp-tool.active-tool{background:rgba(37,99,235,.3);color:var(--blue);
+  border-color:rgba(37,99,235,.4)}
+.vp-tool-sep{height:1px;background:rgba(255,255,255,.07);margin:3px 2px}
+.vp-viewport{flex:1;display:flex;position:relative;overflow:hidden}
+.vp-canvas{flex:1;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:10px;position:relative}
+.vp-placeholder-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;gap:12px;pointer-events:none}
+.vp-3d-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  color:rgba(255,255,255,.15)}
+.vp-axis{position:absolute;bottom:12px;left:12px;display:flex;flex-direction:column;gap:2px}
+.vp-axis-line{display:flex;align-items:center;gap:4px;font-size:9px;font-weight:700}
+.vp-perf{position:absolute;top:8px;right:8px;font-size:9px;color:rgba(255,255,255,.18);
+  font-family:monospace;text-align:right;line-height:1.6}
+.vp-toggle-btn{padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;
+  cursor:pointer;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);
+  color:rgba(255,255,255,.75);transition:all .12s;font-family:inherit;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0}
+.vp-toggle-btn:hover{background:rgba(255,255,255,.15);color:#fff}
+.vp-toggle-btn.open{background:rgba(37,99,235,.25);border-color:rgba(37,99,235,.5);
+  color:var(--blue)}
+
+/* ── PART HEADER ── */
 .part-hdr{background:var(--surface);padding:14px 18px 0;
   border-bottom:1px solid var(--border);flex-shrink:0}
 .part-hdr-top{display:flex;align-items:flex-start;gap:14px;margin-bottom:10px}
@@ -329,12 +374,78 @@ input[type=range]{width:100%;accent-color:var(--blue);cursor:pointer}
 
   <!-- MAIN CONTENT -->
   <div class="main">
-    <div class="part-hdr" id="partHdr">
-      <!-- populated by JS -->
+
+    <!-- VIEWER PANEL (collapsible) -->
+    <div class="viewer-panel closed" id="viewerPanel">
+      <div class="vp-tabs">
+        <div class="vp-tab active" onclick="switchViewerTab('step',this)">&#9645; STEP Model</div>
+        <div class="vp-tab" onclick="switchViewerTab('pdf',this)">&#9633; Blueprint PDF</div>
+        <div class="vp-filename" id="vpFilename">HMA-BODY-001_RevB.step</div>
+      </div>
+      <div class="vp-viewport">
+        <!-- Toolbar strip -->
+        <div class="vp-tools">
+          <div class="vp-tool active-tool" title="Orbit">&#8635;</div>
+          <div class="vp-tool" title="Pan">&#10021;</div>
+          <div class="vp-tool" title="Zoom">&#9906;</div>
+          <div class="vp-tool-sep"></div>
+          <div class="vp-tool" title="Section View">&#9135;</div>
+          <div class="vp-tool" title="Measure">&#8213;</div>
+          <div class="vp-tool-sep"></div>
+          <div class="vp-tool" title="Fit to View">&#9633;</div>
+          <div class="vp-tool" title="Isometric">&#8900;</div>
+          <div class="vp-tool" title="Top View">T</div>
+          <div class="vp-tool" title="Front View">F</div>
+        </div>
+        <!-- Viewport canvas area -->
+        <div class="vp-canvas" id="vpCanvas">
+          <div class="vp-placeholder-label">
+            <!-- Isometric wireframe SVG placeholder -->
+            <svg width="180" height="160" viewBox="0 0 180 160" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.55">
+              <!-- Bottom face -->
+              <path d="M90 120 L30 86 L90 52 L150 86 Z" stroke="#4b9eff" stroke-width="1.2" fill="rgba(37,99,235,0.06)"/>
+              <!-- Top face -->
+              <path d="M90 72 L30 38 L90 4 L150 38 Z" stroke="#4b9eff" stroke-width="1.2" fill="rgba(37,99,235,0.1)"/>
+              <!-- Left face -->
+              <path d="M30 86 L30 38 L90 4 L90 52 Z" stroke="#4b9eff" stroke-width="1.2" fill="rgba(37,99,235,0.05)"/>
+              <!-- Right face -->
+              <path d="M90 52 L90 4 L150 38 L150 86 Z" stroke="#4b9eff" stroke-width="1.2" fill="rgba(37,99,235,0.08)"/>
+              <!-- Pockets / features on top -->
+              <rect x="68" y="12" width="24" height="16" rx="2" stroke="rgba(255,255,255,0.25)" stroke-width="0.8" fill="rgba(0,0,0,0.3)"/>
+              <!-- Bore circles on front face -->
+              <circle cx="90" cy="86" r="12" stroke="#60a5fa" stroke-width="0.9" fill="none" stroke-dasharray="2 2"/>
+              <circle cx="90" cy="86" r="6" stroke="#60a5fa" stroke-width="0.7" fill="none"/>
+              <!-- Hole indicators -->
+              <circle cx="55" cy="70" r="3" stroke="rgba(255,255,255,0.3)" stroke-width="0.8" fill="none"/>
+              <circle cx="125" cy="70" r="3" stroke="rgba(255,255,255,0.3)" stroke-width="0.8" fill="none"/>
+              <!-- Thread callout lines -->
+              <line x1="90" y1="74" x2="90" y2="62" stroke="rgba(255,165,0,0.5)" stroke-width="0.7" stroke-dasharray="1.5 1.5"/>
+              <circle cx="90" cy="60" r="2" stroke="rgba(255,165,0,0.7)" stroke-width="0.7" fill="none"/>
+            </svg>
+            <div class="vp-3d-label" id="vpLabel">STEP viewer loads here</div>
+          </div>
+          <!-- Axis indicator -->
+          <div class="vp-axis">
+            <div class="vp-axis-line"><span style="color:#ef4444;font-size:8px">━</span><span style="color:rgba(255,255,255,.3);font-size:9px">X</span></div>
+            <div class="vp-axis-line"><span style="color:#22c55e;font-size:8px">━</span><span style="color:rgba(255,255,255,.3);font-size:9px">Y</span></div>
+            <div class="vp-axis-line"><span style="color:#3b82f6;font-size:8px">━</span><span style="color:rgba(255,255,255,.3);font-size:9px">Z</span></div>
+          </div>
+          <!-- Perf/meta overlay -->
+          <div class="vp-perf">3.875 × 5.750 × 7.625<br>42% material removal<br>occt-import-js + three.js</div>
+        </div>
+      </div>
     </div>
-    <div class="tab-body" id="tabBody">
-      <!-- populated by JS -->
+
+    <!-- DETAIL COLUMN -->
+    <div class="main-inner">
+      <div class="part-hdr" id="partHdr">
+        <!-- populated by JS -->
+      </div>
+      <div class="tab-body" id="tabBody">
+        <!-- populated by JS -->
+      </div>
     </div>
+
   </div>
 
   <!-- RIGHT PANEL -->
@@ -587,8 +698,12 @@ function renderPartHeader(item) {
     ? ['details','notes']
     : ['details','notes'];
 
+  const isOpen = state.viewerOpen;
   hdr.innerHTML = `
     <div class="part-hdr-top">
+      <button class="vp-toggle-btn${isOpen?' open':''}" onclick="toggleViewer()" title="Toggle 3D / PDF viewer">
+        <span>${isOpen?'◀':'▶'}</span> ${isOpen?'Hide Viewer':'3D · PDF'}
+      </button>
       <div class="part-thumb">
         <svg width="38" height="38" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="4" y="4" width="30" height="30" rx="3" stroke="#64748b" stroke-width="1.5" fill="none"/>
@@ -1156,8 +1271,44 @@ function bindBuyListeners(item) { /* inline onchange used */ }
 function bindOSPListeners(item) { /* inline onchange used */ }
 
 // ─────────────────────────────────────────────
+// VIEWER PANEL
+// ─────────────────────────────────────────────
+function toggleViewer() {
+  state.viewerOpen = !state.viewerOpen;
+  const panel = document.getElementById('viewerPanel');
+  panel.classList.toggle('closed', !state.viewerOpen);
+  // Re-render header to flip button state
+  renderPartHeader(items[state.activeId]);
+  // Update filename in panel
+  updateViewerMeta(items[state.activeId]);
+}
+
+function switchViewerTab(tab, el) {
+  document.querySelectorAll('.vp-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const canvas = document.getElementById('vpCanvas');
+  const label  = document.getElementById('vpLabel');
+  const fname  = document.getElementById('vpFilename');
+  if (tab === 'pdf') {
+    label.textContent = 'Blueprint PDF loads here';
+    if (canvas) canvas.style.background = '#1e2030';
+    if (fname) fname.textContent = items[state.activeId].pn + '_RevB.pdf';
+  } else {
+    label.textContent = 'STEP viewer loads here';
+    if (canvas) canvas.style.background = '';
+    if (fname) fname.textContent = items[state.activeId].pn + '_RevB.step';
+  }
+}
+
+function updateViewerMeta(item) {
+  const fname = document.getElementById('vpFilename');
+  if (fname) fname.textContent = item.pn + '_RevB.step';
+}
+
+// ─────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────
+state.viewerOpen = false;
 refreshAll();
 </script>
 </body>
